@@ -8,7 +8,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from pathlib import Path
 from typing import Any
+import yaml
 
 ACTIONABLE_PRIORITIES = frozenset({"P1", "P2"})
 
@@ -52,3 +54,17 @@ def sign_payload(payload: dict[str, Any], secret: str) -> str:
 
 def make_envelope(payload: dict[str, Any], secret: str) -> dict[str, Any]:
     return {"payload": payload, "signature": sign_payload(payload, secret), "alg": "HMAC-SHA256"}
+
+
+def load_fix_hints(rules_path: Path) -> dict[str, str]:
+    """Map rule_id -> fix_hint from rules.yaml. fix_hint is deterministic, OUR text,
+    never email-derived. Rules without a fix_hint are omitted."""
+    if not rules_path.exists():
+        return {}
+    data = yaml.safe_load(rules_path.read_text()) or {}
+    hints: dict[str, str] = {}
+    for tier in ("urgent", "notable"):
+        for entry in (data.get(tier) or []):
+            if isinstance(entry, dict) and entry.get("id") and entry.get("fix_hint"):
+                hints[entry["id"]] = str(entry["fix_hint"])
+    return hints

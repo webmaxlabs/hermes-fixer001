@@ -57,3 +57,30 @@ def test_make_envelope_shape():
     assert env["alg"] == "HMAC-SHA256"
     assert env["payload"] == p
     assert env["signature"] == sign_payload(p, "secret")
+
+
+def test_load_fix_hints_reads_optional_field(tmp_path):
+    from inbox_watcher.dispatcher import load_fix_hints
+    p = tmp_path / "rules.yaml"
+    p.write_text(
+        "urgent:\n"
+        "  - id: vercel_deploy_failed\n    match: \"x\"\n    fix_hint: check the build logs\n"
+        "  - id: no_hint_rule\n    match: \"y\"\n"
+        "ignore:\n  - \"(?i)unsubscribe\"\n"
+    )
+    hints = load_fix_hints(p)
+    assert hints["vercel_deploy_failed"] == "check the build logs"
+    assert "no_hint_rule" not in hints  # absent hint -> not in map
+
+
+def test_load_fix_hints_missing_file_returns_empty(tmp_path):
+    from inbox_watcher.dispatcher import load_fix_hints
+    assert load_fix_hints(tmp_path / "nope.yaml") == {}
+
+
+def test_shipped_rules_fix_hints_are_strings():
+    from pathlib import Path
+    from inbox_watcher.dispatcher import load_fix_hints
+    hints = load_fix_hints(Path(__file__).resolve().parents[2] / "config" / "rules.yaml")
+    assert all(isinstance(v, str) and v for v in hints.values())
+    assert len(hints) >= 2
