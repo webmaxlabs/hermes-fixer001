@@ -58,3 +58,48 @@ def test_make_resolver_closes_over_map(repo_map):
     resolver = make_resolver(repo_map)
     assert resolver("vercel", "Project: nexus-prod") == "nexus-uncensored"
     assert resolver("vercel", "unrelated") is None
+
+
+def test_invalid_regex_raises(tmp_path):
+    p = tmp_path / "repo_map.yaml"
+    p.write_text("extractors:\n  vercel: '(?P<project>[unterminated'\n")
+    with pytest.raises(ValueError):
+        load_repo_map(p)
+
+
+def test_extractor_without_project_group_raises(tmp_path):
+    p = tmp_path / "repo_map.yaml"
+    p.write_text("extractors:\n  vercel: 'project[:/ ]+([a-z0-9-]+)'\n")
+    with pytest.raises(ValueError):
+        load_repo_map(p)
+
+
+def test_mapping_repo_not_in_allowlist_raises(tmp_path):
+    p = tmp_path / "repo_map.yaml"
+    p.write_text(
+        "mappings:\n"
+        "  - vendor: vercel\n"
+        "    project: nexus-prod\n"
+        "    repo: not-allowlisted\n"
+    )
+    with pytest.raises(ValueError):
+        load_repo_map(p)
+
+
+def test_mapping_missing_field_raises(tmp_path):
+    p = tmp_path / "repo_map.yaml"
+    p.write_text(
+        "mappings:\n"
+        "  - vendor: vercel\n"
+        "    project: nexus-prod\n"
+    )
+    with pytest.raises(ValueError):
+        load_repo_map(p)
+
+
+def test_nonexistent_path_returns_empty_map(tmp_path):
+    p = tmp_path / "does_not_exist.yaml"
+    rm = load_repo_map(p)
+    assert isinstance(rm, RepoMap)
+    assert dict(rm.mappings) == {}
+    assert dict(rm.extractors) == {}

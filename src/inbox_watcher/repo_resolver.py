@@ -10,7 +10,8 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from types import MappingProxyType
+from typing import Callable, Mapping
 import yaml
 
 log = logging.getLogger("inbox_watcher.repo_resolver")
@@ -23,14 +24,14 @@ ALLOWLIST = frozenset({
 
 @dataclass(frozen=True)
 class RepoMap:
-    mappings: dict[tuple[str, str], str]      # (vendor, project_id) -> repo
-    extractors: dict[str, re.Pattern]         # vendor -> regex with named group 'project'
+    mappings: Mapping[tuple[str, str], str]   # (vendor, project_id) -> repo
+    extractors: Mapping[str, re.Pattern]      # vendor -> regex with named group 'project'
 
 
 def load_repo_map(path: Path) -> RepoMap:
     if not path.exists():
         log.warning("repo_map not found at %s; resolver will return None for all", path)
-        return RepoMap(mappings={}, extractors={})
+        return RepoMap(mappings=MappingProxyType({}), extractors=MappingProxyType({}))
     data = yaml.safe_load(path.read_text()) or {}
     extractors: dict[str, re.Pattern] = {}
     for vendor, pat in (data.get("extractors") or {}).items():
@@ -51,7 +52,10 @@ def load_repo_map(path: Path) -> RepoMap:
         if repo not in ALLOWLIST:
             raise ValueError(f"mapping repo {repo!r} not in allowlist")
         mappings[(vendor, project)] = repo
-    return RepoMap(mappings=mappings, extractors=extractors)
+    return RepoMap(
+        mappings=MappingProxyType(mappings),
+        extractors=MappingProxyType(extractors),
+    )
 
 
 def resolve_repo(vendor: str, text: str, repo_map: RepoMap) -> str | None:
