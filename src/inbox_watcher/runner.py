@@ -18,7 +18,9 @@ _PRIORITY_BY_TIER = {"urgent": "P1", "notable": "P2"}
 def run_cycle(*, fetcher, rules: RuleMatcher, dedup: DedupStore,
               findings: InboxFindingsWriter) -> dict[str, Any]:
     started = time.monotonic()
-    counts = {"P1": 0, "P2": 0, "P3": 0, "dropped": 0, "quarantined_or_skipped": 0}
+    counts = {"P1": 0, "P2": 0, "P3": 0, "dropped": 0}
+    # NB: quarantined messages are dropped + logged at INFO inside AgentMailFetcher.fetch(),
+    # before they reach run_cycle, so they are intentionally not counted here.
 
     for msg in fetcher.fetch():
         try:
@@ -27,15 +29,20 @@ def run_cycle(*, fetcher, rules: RuleMatcher, dedup: DedupStore,
                 counts["dropped"] += 1
                 continue
             if res is None:
+                # Unmatched authenticated mail = notify-only P3. We pass tier "notable"
+                # to dedup so it's suppressed like a non-urgent finding (never an immediate
+                # SEND), even though the finding's own priority is P3.
                 priority, rule_id, tier = "P3", "unclassified", "notable"
             else:
                 tier = res.tier
                 priority = _PRIORITY_BY_TIER.get(tier, "P3")
                 rule_id = res.rule_id or "unclassified"
 
+            # Dedup on the same text the classifier matched (msg.raw), so body-only
+            # matches suppress correctly. DedupStore.normalize() strips noise.
             decision = dedup.record(source_id=msg.vendor, tier=tier,
-                                    rule_id=rule_id, message=msg.subject)
-            h = dedup.hash_finding(msg.vendor, rule_id, msg.subject)
+                                    rule_id=rule_id, message=msg.raw)
+            h = dedup.hash_finding(msg.vendor, rule_id, msg.raw)
             counts[priority] += 1
             findings.write_finding(InboxFinding(
                 ts=msg.ts or _now(), vendor=msg.vendor, priority=priority,
@@ -48,7 +55,7 @@ def run_cycle(*, fetcher, rules: RuleMatcher, dedup: DedupStore,
             log.warning("classify/write failed for %s: %s", getattr(msg, "message_id", "?"), exc)
             findings.write_error({"ts": _now(), "message_id": getattr(msg, "message_id", ""),
                                   "error": f"{type(exc).__name__}: {exc}",
-                                  "trace": "".join(traceback.format_exception_only(type(exc), exc)).strip()})
+                                  "trace": traceback.format_exc()})
             continue
 
     deleted = dedup.cleanup(older_than_days=14)
