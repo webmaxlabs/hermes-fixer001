@@ -103,3 +103,14 @@ def test_nonexistent_path_returns_empty_map(tmp_path):
     assert isinstance(rm, RepoMap)
     assert dict(rm.mappings) == {}
     assert dict(rm.extractors) == {}
+
+
+def test_shipped_repo_map_loads_and_is_allowlisted():
+    from pathlib import Path
+    from inbox_watcher.repo_resolver import load_repo_map, ALLOWLIST
+    rm = load_repo_map(Path(__file__).resolve().parents[2] / "config" / "repo_map.yaml")
+    # Every mapping target must be allowlisted; file must parse.
+    for repo in rm.mappings.values():
+        assert repo in ALLOWLIST
+    # Extractors compile and expose the 'project' group (load_repo_map asserts this).
+    assert set(rm.extractors).issubset({"vercel", "github", "stripe", "uptime"})
