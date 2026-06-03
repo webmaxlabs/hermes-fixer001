@@ -6,3 +6,4 @@ __pycache__/
 *.egg-info/
 .env
 NOTES-agentmail.md
+.coverage
