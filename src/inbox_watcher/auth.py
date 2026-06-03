@@ -24,11 +24,14 @@ _DKIM_RE = re.compile(r"\bdkim=(\w+)", re.I)
 _DMARC_RE = re.compile(r"\bdmarc=(\w+)", re.I)
 
 
-def _domain_of(addr: str) -> str:
-    # Handles "Display Name <user@domain>" and "user@domain".
+def _bare_addr(addr: str) -> str:
+    # Extract bare "user@domain" from "Display Name <user@domain>" or "user@domain".
     m = re.search(r"<([^>]+)>", addr)
-    bare = m.group(1) if m else addr
-    return bare.split("@")[-1].strip().lower()
+    return (m.group(1) if m else addr).strip().lower()
+
+
+def _domain_of(addr: str) -> str:
+    return _bare_addr(addr).split("@")[-1]
 
 
 def _auth_results(headers: dict) -> str:
@@ -43,7 +46,7 @@ def _auth_results(headers: dict) -> str:
 def authenticate(*, from_addr: str, to_addrs: list[str], headers: dict,
                  allowed_domains: frozenset[str]) -> AuthVerdict:
     # 1. recipient scope (defense-in-depth; the forward is alerts-only).
-    if not any(_domain_of(a) and REQUIRED_RECIPIENT in a.lower() for a in to_addrs):
+    if not any(_bare_addr(a) == REQUIRED_RECIPIENT for a in to_addrs):
         return AuthVerdict(ok=False, reason="recipient not alerts@webmaxlabs.com")
 
     # 2. from-domain allowlist.
@@ -55,8 +58,10 @@ def authenticate(*, from_addr: str, to_addrs: list[str], headers: dict,
     ar = _auth_results(headers)
     if not ar:
         return AuthVerdict(ok=False, reason="no Authentication-Results header to verify auth")
-    dkim = (_DKIM_RE.search(ar) or [None, ""])[1].lower() if _DKIM_RE.search(ar) else ""
-    dmarc = (_DMARC_RE.search(ar) or [None, ""])[1].lower() if _DMARC_RE.search(ar) else ""
+    m_dkim = _DKIM_RE.search(ar)
+    m_dmarc = _DMARC_RE.search(ar)
+    dkim = m_dkim.group(1).lower() if m_dkim else ""
+    dmarc = m_dmarc.group(1).lower() if m_dmarc else ""
     if dkim == "pass" or dmarc == "pass":
         return AuthVerdict(ok=True, reason="")
     return AuthVerdict(ok=False, reason=f"dkim={dkim or 'absent'} dmarc={dmarc or 'absent'} (neither passed)")

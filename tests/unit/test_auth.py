@@ -55,3 +55,11 @@ def test_dmarc_pass_with_dkim_absent_but_arc_present():
                      headers={"ARC-Authentication-Results": "i=1; mx.google.com; dkim=pass header.d=stripe.com; dmarc=pass header.from=stripe.com"},
                      allowed_domains=ALLOWED_FROM_DOMAINS)
     assert v.ok is True
+
+
+def test_recipient_substring_spoof_is_quarantined():
+    v = authenticate(from_addr="alerts@vercel.com",
+                     to_addrs=["alerts@webmaxlabs.com <fixer001@agentmail.to>"],
+                     headers=OK_HEADERS, allowed_domains=ALLOWED_FROM_DOMAINS)
+    assert v.ok is False
+    assert "recipient" in v.reason

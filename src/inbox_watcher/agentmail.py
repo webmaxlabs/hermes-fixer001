@@ -2,7 +2,7 @@
 from __future__ import annotations
 import logging
 from typing import Iterator
-from inbox_watcher.auth import authenticate
+from inbox_watcher.auth import authenticate, _domain_of
 from inbox_watcher.cursor import Cursor
 from inbox_watcher.types import InboxMessage
 
@@ -25,8 +25,7 @@ def _sender_addr(msg) -> str:
 
 
 def _vendor(from_addr: str) -> str:
-    dom = from_addr.split("@")[-1].strip(">").lower()
-    return _VENDOR_BY_DOMAIN.get(dom, "unknown")
+    return _VENDOR_BY_DOMAIN.get(_domain_of(from_addr), "unknown")
 
 
 class AgentMailFetcher:
@@ -53,6 +52,11 @@ class AgentMailFetcher:
                 return
 
     def fetch(self) -> Iterator[InboxMessage]:
+        """Yield authenticated InboxMessages newer than the cursor.
+
+        Side effect: advances the cursor when the generator is exhausted. Must be
+        fully consumed for the cursor to advance.
+        """
         floor = self._cursor.last_ts()
         max_ts = floor
         for stub in self._iter_raw():
@@ -63,6 +67,8 @@ class AgentMailFetcher:
             try:
                 full = self._client.inboxes.messages.get(inbox_id=self._inbox, message_id=mid)
             except Exception as exc:                       # per-message isolation
+                # Cursor is intentionally NOT advanced past a fetch error, so a
+                # transient failure is retried on the next cycle.
                 log.warning("get message %s failed: %s", mid, exc)
                 continue
             from_addr = _sender_addr(full)
