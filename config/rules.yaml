@@ -1,0 +1,33 @@
+# inbox-watcher classification rules. Matched against "subject\nbody-snippet".
+# Evaluated urgent -> notable -> ignore; first match wins.
+# Tiers map to priority: urgent=P1, notable=P2; unmatched authenticated mail=P3.
+urgent:
+  - id: vercel_deploy_failed
+    match: "(?i)(deployment .*failed|build failed|deploy(ment)? error)"
+    description: Vercel deployment or build failed
+  - id: stripe_payment_failed
+    match: "(?i)(payment failed|invoice payment failed|card was declined|subscription .*past due)"
+    description: Stripe payment/subscription failure
+  - id: stripe_key_or_account
+    match: "(?i)(account .*restricted|api key .*(expired|revoked|rotated)|unable to process charges)"
+    description: Stripe account/key problem
+  - id: uptime_down
+    match: "(?i)(is down|monitor .*down|site .*unreachable|service .*unavailable|incident opened)"
+    description: Uptime monitor reports an outage
+notable:
+  - id: stripe_dispute
+    match: "(?i)(dispute|chargeback)"
+    description: Stripe dispute/chargeback opened
+  - id: github_security_alert
+    match: "(?i)(dependabot|security (alert|advisory|vulnerability)|known vulnerabilit)"
+    description: GitHub security advisory / Dependabot
+  - id: github_failed_workflow
+    match: "(?i)(workflow run failed|run failed|ci .*failed|checks failed)"
+    description: GitHub Actions workflow failure
+  - id: usage_or_billing
+    match: "(?i)(usage .*(limit|exceeded)|billing|spending limit|over your plan)"
+    description: Billing / usage threshold
+ignore:
+  - "(?i)unsubscribe"
+  - "(?i)(newsletter|product update|what's new|weekly digest)"
+  - "(?i)(receipt|thanks for your payment|payment succeeded)"
