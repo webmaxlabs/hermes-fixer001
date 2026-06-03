@@ -2,6 +2,7 @@
 from __future__ import annotations
 import logging
 from typing import Iterator
+from urllib.parse import quote
 from inbox_watcher.auth import authenticate, domain_of
 from inbox_watcher.cursor import Cursor
 from inbox_watcher.types import InboxMessage
@@ -100,7 +101,9 @@ class AgentMailFetcher:
             yield InboxMessage(
                 message_id=mid, vendor=_vendor(from_addr), from_addr=from_addr,
                 subject=subject, text=text, ts=ts,
-                link=f"https://app.agentmail.to/inboxes/{self._inbox}/messages/{mid}",
+                # Real Message-IDs are angle-bracketed (<id@host>) and contain @ — URL-encode
+                # so the link is a valid URL and can't break Slack's <link|view> syntax.
+                link=f"https://app.agentmail.to/inboxes/{quote(self._inbox)}/messages/{quote(mid)}",
                 raw=f"{subject}\n{text[:500]}",
             )
             if ts > max_ts:

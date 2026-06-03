@@ -63,6 +63,18 @@ def test_skips_messages_at_or_before_cursor(tmp_path: Path):
     assert list(f.fetch()) == []
 
 
+def test_angle_bracket_message_id_makes_url_safe_link(tmp_path: Path):
+    # Real RFC-2822 Message-IDs are angle-bracketed and contain '@'; the link must
+    # be URL-encoded so it's valid and can't break Slack's <link|view> syntax.
+    mid = "<0100019e@email.amazonses.com>"
+    m = _msg(mid, "alerts@vercel.com", "Deploy failed", "2026-06-02T10:00:00+00:00")
+    f, _ = _fetcher(tmp_path, [m], {mid: m})
+    out = list(f.fetch())
+    assert len(out) == 1
+    assert "<" not in out[0].link and ">" not in out[0].link
+    assert "%3C0100019e" in out[0].link and "%3E" in out[0].link
+
+
 def test_datetime_timestamp_is_canonicalized_to_iso(tmp_path: Path):
     # AgentMail 0.5.2 returns `timestamp` as a tz-aware datetime, not a string.
     from datetime import datetime, timezone
