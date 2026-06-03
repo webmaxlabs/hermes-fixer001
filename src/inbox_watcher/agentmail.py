@@ -28,6 +28,16 @@ def _vendor(from_addr: str) -> str:
     return _VENDOR_BY_DOMAIN.get(domain_of(from_addr), "unknown")
 
 
+def _ts_iso(value) -> str:
+    # AgentMail 0.5.2 returns `timestamp` as a tz-aware datetime; canonicalize to
+    # ISO-8601 (e.g. "2026-06-02T10:00:00+00:00") for a stable, lexically-sortable
+    # cursor key. Strings (tests / other shapes) pass through unchanged.
+    if value is None:
+        return ""
+    iso = getattr(value, "isoformat", None)
+    return iso() if callable(iso) else str(value)
+
+
 class AgentMailFetcher:
     def __init__(self, *, client, inbox_id: str, cursor: Cursor,
                  allowed_domains: frozenset[str], page_limit: int = 50) -> None:
@@ -60,9 +70,10 @@ class AgentMailFetcher:
         floor = self._cursor.last_ts()
         max_ts = floor
         for stub in self._iter_raw():
-            ts = str(getattr(stub, "timestamp", "") or "")
+            ts = _ts_iso(getattr(stub, "timestamp", None))
             # Lexicographic compare is correct only for same-offset (UTC)
-            # ISO-8601 timestamps; see NOTES-agentmail.md reconciliation.
+            # ISO-8601 timestamps; AgentMail returns tz-aware UTC datetimes, which
+            # _ts_iso canonicalizes. See NOTES-agentmail.md reconciliation.
             if floor and ts and ts <= floor:
                 continue
             mid = getattr(stub, "message_id", "")

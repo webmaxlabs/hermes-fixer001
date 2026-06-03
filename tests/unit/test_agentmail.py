@@ -61,3 +61,15 @@ def test_skips_messages_at_or_before_cursor(tmp_path: Path):
     f = AgentMailFetcher(client=client, inbox_id="i", cursor=cur,
                          allowed_domains=frozenset({"vercel.com"}))
     assert list(f.fetch()) == []
+
+
+def test_datetime_timestamp_is_canonicalized_to_iso(tmp_path: Path):
+    # AgentMail 0.5.2 returns `timestamp` as a tz-aware datetime, not a string.
+    from datetime import datetime, timezone
+    dt = datetime(2026, 6, 2, 10, 0, tzinfo=timezone.utc)
+    m = _msg("m1", "alerts@vercel.com", "Deploy failed", dt)
+    f, _ = _fetcher(tmp_path, [m], {"m1": m})
+    out = list(f.fetch())
+    assert len(out) == 1
+    assert out[0].ts == "2026-06-02T10:00:00+00:00"
+    assert f._cursor.last_ts() == "2026-06-02T10:00:00+00:00"
