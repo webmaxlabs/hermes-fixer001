@@ -18,6 +18,10 @@ class Config:
     data_dir: Path
     findings_dir: Path
     heartbeat_path: Path
+    dispatch_secret: str
+    dispatch_mode: str
+    repo_map_path: Path
+    dispatch_ledger_path: Path
 
     @classmethod
     def load(cls, env_file: Path | None = None) -> "Config":
@@ -32,6 +36,9 @@ class Config:
                 raise RuntimeError(f"missing required env var: {name}")
             return v
 
+        findings_dir = Path(os.environ.get(
+            "INBOX_WATCHER_FINDINGS_DIR", str(REPO_ROOT / "findings")))
+
         return cls(
             agentmail_api_key=req("AGENTMAIL_API_KEY"),
             inbox_id=os.environ.get("AGENTMAIL_INBOX_ID", "fixer001@agentmail.to").strip(),
@@ -39,7 +46,11 @@ class Config:
             slack_channel=os.environ.get("SLACK_DIGEST_CHANNEL", "#hermes-digest").strip(),
             rules_path=REPO_ROOT / "config" / "rules.yaml",
             data_dir=Path(os.environ.get("INBOX_WATCHER_DATA_DIR", str(REPO_ROOT / "data"))),
-            findings_dir=Path(os.environ.get("INBOX_WATCHER_FINDINGS_DIR", str(REPO_ROOT / "findings"))),
+            findings_dir=findings_dir,
             heartbeat_path=Path(os.environ.get(
                 "INBOX_WATCHER_HEARTBEAT_PATH", str(Path.home() / "inbox-watcher" / ".last-run"))),
+            dispatch_secret=os.environ.get("HERMES_FIXER_DISPATCH_SECRET", "").strip(),
+            dispatch_mode=os.environ.get("DISPATCH_MODE", "dry_run").strip() or "dry_run",
+            repo_map_path=REPO_ROOT / "config" / "repo_map.yaml",
+            dispatch_ledger_path=findings_dir / "dispatched.jsonl",
         )
