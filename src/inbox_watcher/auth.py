@@ -1,16 +1,25 @@
 """Sender-authentication gate. Pure functions over message metadata.
 
-Mail reaches us forwarded through Workspace, so SPF fails in transit and is NOT
-used to reject. We trust the forwarder-stamped Authentication-Results / ARC
-verdict (original vendor DKIM + DMARC), an explicit from-domain allowlist, and a
-recipient-scope check.
+Real topology (confirmed against live forwarded mail, 2026-06-02): WebMax's alert
+pipeline sends via Resend `from: alerts@webmaxlabs.com` `to: jake@webmaxlabs.com`;
+the jake@ Google Workspace box forwards to `fixer001@agentmail.to`. So the trusted
+SENDER is the first-party `webmaxlabs.com` domain (Resend/SES DKIM-signed), and the
+RECIPIENT is the org domain (jake@/alerts@), NOT fixer001 directly. Vendor domains
+are kept allowlisted for any future native vendor mail forwarded the same way.
+
+Mail reaches us forwarded, so SPF fails in transit and is NOT used to reject. We
+trust the forwarder-stamped Authentication-Results / ARC DKIM/DMARC verdict, a
+from-domain allowlist, and a recipient-domain scope check (defense-in-depth: it
+rejects mail addressed only to fixer001@, e.g. the Google forwarding confirmation).
 """
 from __future__ import annotations
 import re
 from inbox_watcher.types import AuthVerdict
 
-# Vendor domains we accept alerts from. Tune in one place.
+# From-domains we accept alerts from. webmaxlabs.com is the live first-party sender
+# (Resend); the vendor domains cover future native vendor mail. Tune in one place.
 ALLOWED_FROM_DOMAINS = frozenset({
+    "webmaxlabs.com",
     "vercel.com",
     "stripe.com",
     "github.com",
@@ -18,7 +27,9 @@ ALLOWED_FROM_DOMAINS = frozenset({
     "supabase.io",
 })
 
-REQUIRED_RECIPIENT = "alerts@webmaxlabs.com"
+# Mail must be addressed to our org (jake@ or alerts@ @webmaxlabs.com); this is the
+# forwarding path. Mail addressed only to fixer001@agentmail.to is rejected.
+REQUIRED_RECIPIENT_DOMAIN = "webmaxlabs.com"
 
 _DKIM_RE = re.compile(r"\bdkim=(\w+)", re.I)
 _DMARC_RE = re.compile(r"\bdmarc=(\w+)", re.I)
@@ -45,9 +56,10 @@ def _auth_results(headers: dict) -> str:
 
 def authenticate(*, from_addr: str, to_addrs: list[str], headers: dict,
                  allowed_domains: frozenset[str]) -> AuthVerdict:
-    # 1. recipient scope (defense-in-depth; the forward is alerts-only).
-    if not any(_bare_addr(a) == REQUIRED_RECIPIENT for a in to_addrs):
-        return AuthVerdict(ok=False, reason="recipient not alerts@webmaxlabs.com")
+    # 1. recipient scope (defense-in-depth; mail must reach our org domain, not
+    #    fixer001@ directly).
+    if not any(domain_of(a) == REQUIRED_RECIPIENT_DOMAIN for a in to_addrs):
+        return AuthVerdict(ok=False, reason=f"no recipient on {REQUIRED_RECIPIENT_DOMAIN}")
 
     # 2. from-domain allowlist.
     dom = domain_of(from_addr)

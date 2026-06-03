@@ -35,11 +35,27 @@ def test_quarantines_when_dkim_fails():
     assert "dkim" in v.reason.lower() or "dmarc" in v.reason.lower()
 
 
-def test_quarantines_when_recipient_not_alerts():
-    v = authenticate(from_addr="alerts@vercel.com", to_addrs=["jake@webmaxlabs.com"],
+def test_quarantines_when_recipient_off_org_domain():
+    # Mail addressed only to a non-webmaxlabs.com recipient (e.g. straight to the
+    # AgentMail inbox, or an unrelated address) is rejected.
+    v = authenticate(from_addr="alerts@vercel.com", to_addrs=["fixer001@agentmail.to"],
                      headers=OK_HEADERS, allowed_domains=ALLOWED_FROM_DOMAINS)
     assert v.ok is False
     assert "recipient" in v.reason
+
+
+def test_real_topology_webmax_resend_to_jake_passes():
+    # Live shape: Resend sends from alerts@webmaxlabs.com to jake@webmaxlabs.com,
+    # forwarded to fixer001@. First-party DKIM pass on webmaxlabs.com → accepted.
+    v = authenticate(
+        from_addr="alerts@webmaxlabs.com",
+        to_addrs=["jake@webmaxlabs.com"],
+        headers={"Authentication-Results":
+                 "mx.google.com; dkim=pass header.i=@webmaxlabs.com header.s=resend; "
+                 "dkim=pass header.i=@amazonses.com; spf=pass; dmarc=pass header.from=webmaxlabs.com"},
+        allowed_domains=ALLOWED_FROM_DOMAINS)
+    assert v.ok is True
+    assert v.reason == ""
 
 
 def test_quarantines_when_no_auth_results_header():

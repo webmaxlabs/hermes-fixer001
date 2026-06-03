@@ -10,6 +10,7 @@ log = logging.getLogger("inbox_watcher.agentmail")
 
 # from-domain → short vendor id used as the dedup source and digest label.
 _VENDOR_BY_DOMAIN = {
+    "webmaxlabs.com": "webmax",   # first-party Resend alert pipeline
     "vercel.com": "vercel",
     "stripe.com": "stripe",
     "github.com": "github",
