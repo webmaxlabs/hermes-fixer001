@@ -6,6 +6,7 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "==> rsync source to $REMOTE:$REMOTE_DIR"
 ssh "$REMOTE" "mkdir -p '$REMOTE_DIR' && mkdir -p \$HOME/inbox-watcher"
 rsync -az --delete \
+  --exclude '.env' --exclude '.env.*' \
   --exclude '.venv/' --exclude 'data/' --exclude 'findings/' \
   --exclude '__pycache__/' --exclude '.pytest_cache/' --exclude '.git/' \
   --exclude 'docs/' --exclude 'NOTES-agentmail.md' \

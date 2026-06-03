@@ -30,7 +30,7 @@ def _bare_addr(addr: str) -> str:
     return (m.group(1) if m else addr).strip().lower()
 
 
-def _domain_of(addr: str) -> str:
+def domain_of(addr: str) -> str:
     return _bare_addr(addr).split("@")[-1]
 
 
@@ -50,7 +50,7 @@ def authenticate(*, from_addr: str, to_addrs: list[str], headers: dict,
         return AuthVerdict(ok=False, reason="recipient not alerts@webmaxlabs.com")
 
     # 2. from-domain allowlist.
-    dom = _domain_of(from_addr)
+    dom = domain_of(from_addr)
     if dom not in allowed_domains:
         return AuthVerdict(ok=False, reason=f"from domain not allowed: {dom}")
 

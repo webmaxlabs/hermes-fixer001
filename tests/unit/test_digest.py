@@ -26,6 +26,16 @@ def test_build_text_groups_by_priority_and_includes_links():
     assert "https://app.agentmail.to/b" in text
 
 
+def test_build_text_escapes_slack_control_sequences_in_subject():
+    rows = [_row("b", "P1", "vercel", "Deploy failed <!channel> <https://evil|x>")]
+    text = build_digest_text(dedupe_rank(rows), run_date="2026-06-02")
+    assert "<!channel>" not in text
+    assert "&lt;!channel&gt;" in text
+    assert "<https://evil|x>" not in text
+    # the legitimate trailing view-link must still be intact
+    assert "|view>" in text
+
+
 def test_build_text_handles_empty():
     text = build_digest_text([], run_date="2026-06-02")
     assert "No new" in text

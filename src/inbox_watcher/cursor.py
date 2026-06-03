@@ -18,7 +18,9 @@ class Cursor:
             return ""
 
     def set(self, ts: str) -> None:
-        # Monotonic: never move the cursor backwards.
+        # Monotonic: never move the cursor backwards. Lexicographic compare is
+        # correct only for same-offset (UTC) ISO-8601 timestamps; see
+        # NOTES-agentmail.md reconciliation.
         if ts and ts <= self.last_ts():
             return
         self._path.write_text(json.dumps({"last_ts": ts}))

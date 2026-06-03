@@ -11,6 +11,11 @@ log = logging.getLogger("inbox_watcher.digest")
 _ORDER = {"P1": 0, "P2": 1, "P3": 2}
 
 
+def _slack_escape(s: str) -> str:
+    # Slack mrkdwn treats & < > as special; < > also gate <!channel> and <url|text>.
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def dedupe_rank(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """One row per unique hash (prefer a non-suppressed copy), ranked P1->P3."""
     by_hash: dict[str, dict[str, Any]] = {}
@@ -35,7 +40,7 @@ def build_digest_text(ranked: list[dict[str, Any]], *, run_date: str) -> str:
         if prio != current:
             current = prio
             lines.append(f"\n*{prio}*")
-        lines.append(f"• [{r.get('vendor','?')}] {r.get('subject','')}  <{r.get('link','')}|view>")
+        lines.append(f"• [{r.get('vendor','?')}] {_slack_escape(r.get('subject',''))}  <{r.get('link','')}|view>")
     return "\n".join(lines)
 
 

@@ -2,7 +2,7 @@
 from __future__ import annotations
 import logging
 from typing import Iterator
-from inbox_watcher.auth import authenticate, _domain_of
+from inbox_watcher.auth import authenticate, domain_of
 from inbox_watcher.cursor import Cursor
 from inbox_watcher.types import InboxMessage
 
@@ -25,7 +25,7 @@ def _sender_addr(msg) -> str:
 
 
 def _vendor(from_addr: str) -> str:
-    return _VENDOR_BY_DOMAIN.get(_domain_of(from_addr), "unknown")
+    return _VENDOR_BY_DOMAIN.get(domain_of(from_addr), "unknown")
 
 
 class AgentMailFetcher:
@@ -61,6 +61,8 @@ class AgentMailFetcher:
         max_ts = floor
         for stub in self._iter_raw():
             ts = str(getattr(stub, "timestamp", "") or "")
+            # Lexicographic compare is correct only for same-offset (UTC)
+            # ISO-8601 timestamps; see NOTES-agentmail.md reconciliation.
             if floor and ts and ts <= floor:
                 continue
             mid = getattr(stub, "message_id", "")
