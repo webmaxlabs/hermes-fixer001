@@ -84,3 +84,50 @@ def test_shipped_rules_fix_hints_are_strings():
     hints = load_fix_hints(Path(__file__).resolve().parents[2] / "config" / "rules.yaml")
     assert all(isinstance(v, str) and v for v in hints.values())
     assert len(hints) >= 2
+
+
+def test_dispatch_cycle_emits_actionable_and_skips_repeat(tmp_path):
+    from inbox_watcher.dispatcher import dispatch_cycle
+    from inbox_watcher.ledger import DispatchLedger
+    led = DispatchLedger(tmp_path / "dispatched.jsonl")
+    emitted = []
+    rows = [
+        FINDING,                                   # actionable P1 + repo
+        {**FINDING, "priority": "P3"},             # not actionable
+        {**FINDING, "repo": None},                 # not actionable
+    ]
+    res = dispatch_cycle(findings_rows=rows, ledger=led, fix_hints={}, secret="s",
+                         mode="dry_run", emit=emitted.append, now="t0")
+    assert res == {"dispatched": 1, "skipped": 0, "considered": 1}
+    assert len(emitted) == 1 and emitted[0]["alg"] == "HMAC-SHA256"
+
+    # Second pass over the same actionable finding -> skipped (idempotent).
+    res2 = dispatch_cycle(findings_rows=[FINDING], ledger=led, fix_hints={}, secret="s",
+                          mode="dry_run", emit=emitted.append, now="t1")
+    assert res2 == {"dispatched": 0, "skipped": 1, "considered": 1}
+    assert len(emitted) == 1  # nothing new emitted
+
+
+def test_dispatch_cycle_live_mode_is_guarded(tmp_path):
+    import pytest
+    from inbox_watcher.dispatcher import dispatch_cycle
+    from inbox_watcher.ledger import DispatchLedger
+    led = DispatchLedger(tmp_path / "dispatched.jsonl")
+    with pytest.raises(NotImplementedError):
+        dispatch_cycle(findings_rows=[FINDING], ledger=led, fix_hints={}, secret="s",
+                       mode="live", emit=lambda e: None, now="t0")
+
+
+def test_main_fails_closed_without_secret(tmp_path, monkeypatch):
+    # CORRECTED: capture the original classmethod and delegate to a tmp env file,
+    # rather than the plan's recursive lambda (which infinite-loops).
+    import inbox_watcher.dispatcher as d
+    env = tmp_path / ".env"
+    env.write_text("AGENTMAIL_API_KEY=k\nSLACK_BOT_TOKEN=xoxb-t\n")  # no dispatch secret
+    monkeypatch.delenv("HERMES_FIXER_DISPATCH_SECRET", raising=False)
+    monkeypatch.delenv("DISPATCH_MODE", raising=False)
+    orig = d.Config.load.__func__  # unwrap the classmethod to the plain function
+    monkeypatch.setattr(d.Config, "load",
+                        classmethod(lambda cls, env_file=None: orig(cls, env_file=env)))
+    rc = d.main()
+    assert rc == 2  # fail-closed exit code
