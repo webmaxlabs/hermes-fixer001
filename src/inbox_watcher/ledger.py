@@ -50,6 +50,11 @@ class DispatchLedger:
 
     def record(self, *, error_signature: str, repo: str, rule_id: str,
                priority: str, mode: str, now: str) -> None:
+        # `seen_count` counts how many times this signature was ENCOUNTERED across cycles
+        # (dispatch_cycle calls record() on the skip path too, to touch last_seen_ts), NOT
+        # how many times it was dispatched. A signature dispatches once while open, so after
+        # N daily runs of one open finding seen_count == N but only one envelope was emitted.
+        # `first_dispatched_ts` marks that single dispatch.
         existing = self.fold().get(error_signature)
         if existing:
             first_ts = existing.get("first_dispatched_ts", now)

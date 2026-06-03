@@ -1,8 +1,11 @@
 """Dry-run dispatcher: select actionable findings, build signed payloads, log them.
 
 PHASE A: never calls GitHub. DISPATCH_MODE=live is guarded (NotImplementedError).
-The payload is built from a FIXED key whitelist (PAYLOAD_KEYS) so no email prose
-(subject/text/raw/link) can ever reach the eventual Codex prompt.
+The payload is built from a FIXED key whitelist (PAYLOAD_KEYS): no raw body text
+(text/raw), links, hashes, or dedup state reach it. The one human-readable field,
+`summary`, carries a vendor-prefixed subject snippet ("<vendor>: <subject[:200]>",
+set in runner.py) — so the email SUBJECT is present (bounded, escaped downstream),
+but no other email prose is. Keep that in mind when building the Phase B Codex prompt.
 """
 from __future__ import annotations
 import hashlib
@@ -79,6 +82,11 @@ def load_fix_hints(rules_path: Path) -> dict[str, str]:
 
 def dispatch_cycle(*, findings_rows, ledger: DispatchLedger, fix_hints, secret,
                    mode, emit, now) -> dict[str, int]:
+    # NB: no per-finding try/except here (unlike run_cycle). In Phase A `emit` only
+    # logs, so a ledger.record() failure mid-cycle is harmless — the next run re-emits
+    # the (idempotent) dry-run log line and nothing irreversible happened. Phase B,
+    # where `emit` opens a real PR, MUST add per-finding isolation and record-before-emit
+    # (or a compensating action) so a crash between emit and record can't double-dispatch.
     open_sigs = ledger.open_signatures()
     dispatched = skipped = considered = 0
     for f in findings_rows:
