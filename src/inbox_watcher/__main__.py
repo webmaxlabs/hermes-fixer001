@@ -9,6 +9,7 @@ from inbox_watcher.auth import ALLOWED_FROM_DOMAINS
 from inbox_watcher.config import Config
 from inbox_watcher.cursor import Cursor
 from inbox_watcher.findings import InboxFindingsWriter
+from inbox_watcher.repo_resolver import load_repo_map, make_resolver
 from inbox_watcher.runner import run_cycle
 from datetime import datetime, timezone
 
@@ -22,11 +23,13 @@ def main() -> int:
     fetcher = AgentMailFetcher(client=client, inbox_id=cfg.inbox_id, cursor=cursor,
                                allowed_domains=ALLOWED_FROM_DOMAINS)
     rules = RuleMatcher.from_yaml(cfg.rules_path)
+    resolver = make_resolver(load_repo_map(cfg.repo_map_path))
     dedup = DedupStore(cfg.data_dir / "dedup.sqlite3")
     run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     findings = InboxFindingsWriter(cfg.findings_dir, run_date=run_date)
     try:
-        summary = run_cycle(fetcher=fetcher, rules=rules, dedup=dedup, findings=findings)
+        summary = run_cycle(fetcher=fetcher, rules=rules, dedup=dedup,
+                            findings=findings, resolve_repo=resolver)
     finally:
         dedup.close()
     cfg.heartbeat_path.parent.mkdir(parents=True, exist_ok=True)

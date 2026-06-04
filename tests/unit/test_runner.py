@@ -74,3 +74,59 @@ def test_duplicate_subject_suppressed_second_time(tmp_path: Path):
     rows = InboxFindingsWriter.read_day(root / "findings", "2026-06-02")
     decisions = sorted(r["dedup_decision"] for r in rows)
     assert decisions == ["send", "suppress_dedup"]
+
+
+def test_run_cycle_populates_repo_via_resolver(tmp_path):
+    from inbox_watcher.runner import run_cycle
+    from inbox_watcher.types import InboxMessage
+    from inbox_watcher.findings import InboxFindingsWriter
+    from hermes_watcher_core.rules import RuleMatcher
+    from hermes_watcher_core.dedup import DedupStore
+
+    msg = InboxMessage(
+        message_id="<a@h>", vendor="vercel", from_addr="ci@vercel.com",
+        subject="Deployment failed", text="Project: nexus-prod build failed",
+        ts="2026-06-03T00:00:00+00:00", link="https://x", raw="Deployment failed\nbuild failed",
+    )
+
+    class StubFetcher:
+        def fetch(self):
+            yield msg
+
+    rules = RuleMatcher.from_yaml(
+        "urgent:\n  - id: vercel_deploy_failed\n    match: \"(?i)build failed\"\n")
+    dedup = DedupStore(tmp_path / "d.sqlite3")
+    findings = InboxFindingsWriter(tmp_path / "f", run_date="2026-06-03")
+    resolver = lambda vendor, text: "nexus-uncensored" if vendor == "vercel" else None
+
+    run_cycle(fetcher=StubFetcher(), rules=rules, dedup=dedup, findings=findings,
+              resolve_repo=resolver)
+    dedup.close()
+
+    rows = InboxFindingsWriter.read_day(tmp_path / "f", "2026-06-03")
+    assert rows and rows[0]["repo"] == "nexus-uncensored"
+
+
+def test_run_cycle_repo_none_without_resolver(tmp_path):
+    from inbox_watcher.runner import run_cycle
+    from inbox_watcher.types import InboxMessage
+    from inbox_watcher.findings import InboxFindingsWriter
+    from hermes_watcher_core.rules import RuleMatcher
+    from hermes_watcher_core.dedup import DedupStore
+
+    msg = InboxMessage(message_id="<b@h>", vendor="vercel", from_addr="ci@vercel.com",
+                       subject="Deployment failed", text="Project: nexus-prod",
+                       ts="2026-06-03T00:00:00+00:00", link="https://x",
+                       raw="Deployment failed\nbuild failed")
+
+    class StubFetcher:
+        def fetch(self):
+            yield msg
+
+    rules = RuleMatcher.from_yaml("urgent:\n  - id: x\n    match: \"(?i)build failed\"\n")
+    dedup = DedupStore(tmp_path / "d.sqlite3")
+    findings = InboxFindingsWriter(tmp_path / "f", run_date="2026-06-03")
+    run_cycle(fetcher=StubFetcher(), rules=rules, dedup=dedup, findings=findings)  # no resolver
+    dedup.close()
+    rows = InboxFindingsWriter.read_day(tmp_path / "f", "2026-06-03")
+    assert rows and rows[0]["repo"] is None

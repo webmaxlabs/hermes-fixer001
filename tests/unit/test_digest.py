@@ -41,6 +41,29 @@ def test_build_text_handles_empty():
     assert "No new" in text
 
 
+def test_digest_annotates_actionable_findings():
+    from inbox_watcher.digest import build_digest_text
+    rows = [{
+        "priority": "P1", "vendor": "vercel", "subject": "Deployment failed",
+        "link": "https://x", "hash": "h1", "dedup_decision": "send",
+        "rule_id": "vercel_deploy_failed", "repo": "nexus-uncensored",
+    }]
+    text = build_digest_text(rows, run_date="2026-06-03")
+    assert "would dispatch" in text
+    assert "nexus-uncensored" in text
+
+
+def test_digest_no_annotation_for_p3_or_no_repo():
+    from inbox_watcher.digest import build_digest_text
+    rows = [{
+        "priority": "P3", "vendor": "webmax", "subject": "weekly digest",
+        "link": "https://x", "hash": "h2", "dedup_decision": "send",
+        "rule_id": "unclassified", "repo": None,
+    }]
+    text = build_digest_text(rows, run_date="2026-06-03")
+    assert "would dispatch" not in text
+
+
 def test_post_digest_calls_poster(mocker):
     from inbox_watcher import digest
     posted = {}

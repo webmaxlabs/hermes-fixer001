@@ -1,0 +1,37 @@
+# (vendor, project) -> repo. THE MAP IS THE SECURITY GATE.
+# Email can only select among the repos listed here; it can never name a new one.
+#
+# Every `project` slug below is a PLACEHOLDER. We have observed zero real vendor
+# alerts, so these are guesses. VERIFY each against the first real mail from that
+# vendor before trusting dispatch. Until a real slug matches, resolve_repo returns
+# None -> the finding is digest-only -> nothing dispatches (safe by construction).
+
+extractors:
+  # Pull a project slug from a TRUSTED structural location. TODO(tune): these
+  # patterns are unverified against real vendor email and will need adjustment.
+  vercel: '(?i)project[:/ ]+(?P<project>[a-z0-9][a-z0-9-]{0,99})'
+  github: '(?i)github\.com/[^/\s]+/(?P<project>[a-z0-9][a-z0-9._-]{0,99})'
+
+mappings:
+  # --- nexus-uncensored ---
+  - vendor: vercel
+    project: nexus-uncensored        # VERIFY: real Vercel project slug
+    repo: nexus-uncensored
+  - vendor: github
+    project: nexus-uncensored        # VERIFY: real GitHub repo name
+    repo: nexus-uncensored
+  # --- agent-intel-kit ---
+  - vendor: github
+    project: agent-intel-kit         # VERIFY
+    repo: agent-intel-kit
+  # --- secret-agent-vm ---
+  - vendor: github
+    project: secret-agent-vm         # VERIFY
+    repo: secret-agent-vm
+  # --- boe-generator ---
+  - vendor: vercel
+    project: boe-generator           # VERIFY
+    repo: boe-generator
+  - vendor: github
+    project: boe-generator           # VERIFY
+    repo: boe-generator

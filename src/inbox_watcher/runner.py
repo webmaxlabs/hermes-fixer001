@@ -4,7 +4,7 @@ import logging
 import time
 import traceback
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 from hermes_watcher_core.dedup import AlertDecision, DedupStore
 from hermes_watcher_core.rules import RuleMatcher
 from inbox_watcher.findings import InboxFindingsWriter
@@ -16,7 +16,8 @@ _PRIORITY_BY_TIER = {"urgent": "P1", "notable": "P2"}
 
 
 def run_cycle(*, fetcher, rules: RuleMatcher, dedup: DedupStore,
-              findings: InboxFindingsWriter) -> dict[str, Any]:
+              findings: InboxFindingsWriter,
+              resolve_repo: Callable[[str, str], str | None] | None = None) -> dict[str, Any]:
     started = time.monotonic()
     counts = {"P1": 0, "P2": 0, "P3": 0, "dropped": 0}
     # NB: quarantined messages are dropped + logged at INFO inside AgentMailFetcher.fetch(),
@@ -44,12 +45,15 @@ def run_cycle(*, fetcher, rules: RuleMatcher, dedup: DedupStore,
                                     rule_id=rule_id, message=msg.raw)
             h = dedup.hash_finding(msg.vendor, rule_id, msg.raw)
             counts[priority] += 1
+            repo = None
+            if resolve_repo is not None:
+                repo = resolve_repo(msg.vendor, msg.text or msg.raw)
             findings.write_finding(InboxFinding(
                 ts=msg.ts or _now(), vendor=msg.vendor, priority=priority,
                 rule_id=rule_id, subject=msg.subject[:300],
                 summary=f"{msg.vendor}: {msg.subject[:200]}",
                 message_id=msg.message_id, link=msg.link, hash=h,
-                dedup_decision=decision.value, repo=None,
+                dedup_decision=decision.value, repo=repo,
             ))
         except Exception as exc:                            # per-message isolation
             log.warning("classify/write failed for %s: %s", getattr(msg, "message_id", "?"), exc)

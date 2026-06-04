@@ -6,6 +6,7 @@ from typing import Any, Callable
 import httpx
 from inbox_watcher.config import Config
 from inbox_watcher.findings import InboxFindingsWriter
+from inbox_watcher.dispatcher import is_actionable, error_signature
 
 log = logging.getLogger("inbox_watcher.digest")
 _ORDER = {"P1": 0, "P2": 1, "P3": 2}
@@ -40,7 +41,11 @@ def build_digest_text(ranked: list[dict[str, Any]], *, run_date: str) -> str:
         if prio != current:
             current = prio
             lines.append(f"\n*{prio}*")
-        lines.append(f"• [{r.get('vendor','?')}] {_slack_escape(r.get('subject',''))}  <{r.get('link','')}|view>")
+        line = f"• [{r.get('vendor','?')}] {_slack_escape(r.get('subject',''))}  <{r.get('link','')}|view>"
+        if is_actionable(r):
+            sig = error_signature(r["repo"], r.get("rule_id", "unclassified"))[:8]
+            line += f"  _→ would dispatch → {_slack_escape(r['repo'])} (sig {sig})_"
+        lines.append(line)
     return "\n".join(lines)
 
 
