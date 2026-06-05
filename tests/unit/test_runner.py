@@ -107,6 +107,46 @@ def test_run_cycle_populates_repo_via_resolver(tmp_path):
     assert rows and rows[0]["repo"] == "nexus-uncensored"
 
 
+def test_fleet_urgent_subject_resolves_p1_and_repo_with_shipped_config(tmp_path):
+    """End-to-end against the SHIPPED rules + repo_map: a real fleet [URGENT] relay
+    (project slug only in the subject, not the body) must classify P1 and resolve
+    its repo. This guards the runner passing msg.raw (subject+body) to the resolver,
+    not msg.text (body only)."""
+    from pathlib import Path
+    from inbox_watcher.runner import run_cycle
+    from inbox_watcher.types import InboxMessage
+    from inbox_watcher.findings import InboxFindingsWriter
+    from inbox_watcher.repo_resolver import load_repo_map, make_resolver
+    from hermes_watcher_core.rules import RuleMatcher
+    from hermes_watcher_core.dedup import DedupStore
+
+    cfg = Path(__file__).resolve().parents[2] / "config"
+    rules = RuleMatcher.from_yaml((cfg / "rules.yaml").read_text())
+    resolver = make_resolver(load_repo_map(cfg / "repo_map.yaml"))
+
+    subject = "[URGENT] vercel-log-watcher: uncensored-chatbot — haiku:[auth][error].*InvalidCheck"
+    msg = InboxMessage(
+        message_id="<fleet@h>", vendor="webmax", from_addr="alerts@webmaxlabs.com",
+        subject=subject, text="See the dashboard for details.",  # no project slug in body
+        ts="2026-06-04T00:00:00+00:00", link="https://x", raw=f"{subject}\nSee the dashboard for details.",
+    )
+
+    class StubFetcher:
+        def fetch(self):
+            yield msg
+
+    dedup = DedupStore(tmp_path / "d.sqlite3")
+    findings = InboxFindingsWriter(tmp_path / "f", run_date="2026-06-04")
+    run_cycle(fetcher=StubFetcher(), rules=rules, dedup=dedup, findings=findings,
+              resolve_repo=resolver)
+    dedup.close()
+
+    rows = InboxFindingsWriter.read_day(tmp_path / "f", "2026-06-04")
+    assert rows, "expected one finding"
+    assert rows[0]["priority"] == "P1"
+    assert rows[0]["repo"] == "nexus-uncensored"
+
+
 def test_run_cycle_repo_none_without_resolver(tmp_path):
     from inbox_watcher.runner import run_cycle
     from inbox_watcher.types import InboxMessage

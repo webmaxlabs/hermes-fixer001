@@ -47,7 +47,10 @@ def run_cycle(*, fetcher, rules: RuleMatcher, dedup: DedupStore,
             counts[priority] += 1
             repo = None
             if resolve_repo is not None:
-                repo = resolve_repo(msg.vendor, msg.text or msg.raw)
+                # Resolve against msg.raw (subject + body snippet): the fleet's project
+                # slug lives in the SUBJECT, not the body. The static map is still the
+                # gate, so feeding the subject only widens *selection*, never authority.
+                repo = resolve_repo(msg.vendor, msg.raw)
             findings.write_finding(InboxFinding(
                 ts=msg.ts or _now(), vendor=msg.vendor, priority=priority,
                 rule_id=rule_id, subject=msg.subject[:300],

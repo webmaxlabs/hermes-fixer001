@@ -1,18 +1,33 @@
 # (vendor, project) -> repo. THE MAP IS THE SECURITY GATE.
 # Email can only select among the repos listed here; it can never name a new one.
 #
-# Every `project` slug below is a PLACEHOLDER. We have observed zero real vendor
-# alerts, so these are guesses. VERIFY each against the first real mail from that
-# vendor before trusting dispatch. Until a real slug matches, resolve_repo returns
-# None -> the finding is digest-only -> nothing dispatches (safe by construction).
+# LIVE INPUT: the only mail that ever arrives is alerts@webmaxlabs.com relaying the
+# watcher fleet (vendor='webmax'). Those mappings below are VERIFIED against real
+# 2026-06-03/04 findings. The vercel/github entries are speculative placeholders kept
+# for possible future native vendor mail; they never fire today (no such mail comes).
+# Until a real slug matches, resolve_repo returns None -> digest-only -> nothing
+# dispatches (safe by construction).
 
 extractors:
-  # Pull a project slug from a TRUSTED structural location. TODO(tune): these
-  # patterns are unverified against real vendor email and will need adjustment.
+  # webmax (LIVE): fleet subject "[URGENT] <watcher>: <project> — haiku:<pat>".
+  # Grab the slug after "<...>watcher: ". msg.raw leads with the subject, so .search
+  # hits the subject's slug first.
+  webmax: '(?i)watcher:\s+(?P<project>[a-z0-9][a-z0-9-]{0,99})'
+  # Speculative (no native vendor mail observed): pull a slug from a trusted spot.
   vercel: '(?i)project[:/ ]+(?P<project>[a-z0-9][a-z0-9-]{0,99})'
   github: '(?i)github\.com/[^/\s]+/(?P<project>[a-z0-9][a-z0-9._-]{0,99})'
 
 mappings:
+  # --- webmax fleet escalations (VERIFIED against live mail) ---
+  - vendor: webmax
+    project: agent-intel-kit-q2r2     # Vercel project slug for agent-intel-kit
+    repo: agent-intel-kit
+  - vendor: webmax
+    project: uncensored-chatbot       # fleet's project name for nexus-uncensored
+    repo: nexus-uncensored
+  - vendor: webmax
+    project: apex-athletes
+    repo: apex-athletes
   # --- nexus-uncensored ---
   - vendor: vercel
     project: nexus-uncensored        # VERIFY: real Vercel project slug
