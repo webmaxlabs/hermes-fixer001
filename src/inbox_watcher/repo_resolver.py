@@ -19,6 +19,7 @@ log = logging.getLogger("inbox_watcher.repo_resolver")
 # The only repos the fixer may ever target. A mapping resolving outside this set is dropped.
 ALLOWLIST = frozenset({
     "nexus-uncensored", "agent-intel-kit", "secret-agent-vm", "boe-generator",
+    "apex-athletes",
 })
 
 

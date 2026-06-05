@@ -2,6 +2,23 @@
 # Evaluated urgent -> notable -> ignore; first match wins.
 # Tiers map to priority: urgent=P1, notable=P2; unmatched authenticated mail=P3.
 urgent:
+  # --- Fleet escalations (the real, only input). Mail from alerts@webmaxlabs.com
+  #     relays the watcher fleet; subject = "[URGENT] <watcher>: <project> — haiku:<pat>".
+  #     Specific rules first (distinct rule_id => distinct error_signature + fix_hint),
+  #     catch-all last. Plain "<watcher> digest — N findings" mail lacks [URGENT] and
+  #     stays P3 (notify-only). ---
+  - id: fleet_auth_failure
+    match: '(?i)\[urgent\].*(?:\b401\b|\b403\b|\[auth\]|invalidcheck|unauthorized|forbidden)'
+    description: Fleet escalation — auth/permission failure
+    fix_hint: Trace the 401/403 to the failing call; fix the missing or expired credential, token, or auth check. Never weaken auth to silence it.
+  - id: fleet_db_integrity
+    match: '(?i)\[urgent\].*(?:duplicate key|unique constraint|integrity ?error|constraint violation)'
+    description: Fleet escalation — database integrity/constraint error
+    fix_hint: Make the write idempotent (upsert or conflict-handling); respect the unique constraint rather than removing it.
+  - id: fleet_urgent
+    match: '(?i)\[urgent\].*watcher'
+    description: Fleet escalation (uncategorized urgent)
+    fix_hint: Investigate the error named in the alert subject for the named project; reproduce and fix the root cause with a minimal change.
   - id: vercel_deploy_failed
     match: "(?i)(deployment .*failed|build failed|deploy(ment)? error)"
     description: Vercel deployment or build failed

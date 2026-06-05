@@ -113,4 +113,46 @@ def test_shipped_repo_map_loads_and_is_allowlisted():
     for repo in rm.mappings.values():
         assert repo in ALLOWLIST
     # Extractors compile and expose the 'project' group (load_repo_map asserts this).
-    assert set(rm.extractors).issubset({"vercel", "github", "stripe", "uptime"})
+    assert set(rm.extractors).issubset({"vercel", "github", "stripe", "uptime", "webmax"})
+
+
+# --- Fleet escalations: the real (only) input is alerts@webmaxlabs.com relaying the
+#     watcher fleet, tagged vendor='webmax'. Subjects observed live, 2026-06-03/04. ---
+
+_SHIPPED = None
+
+
+def _shipped_map():
+    from pathlib import Path
+    return load_repo_map(Path(__file__).resolve().parents[2] / "config" / "repo_map.yaml")
+
+
+# (real subject -> expected repo) from live findings on agent001
+FLEET_SUBJECTS = {
+    "[URGENT] vercel-log-watcher: agent-intel-kit-q2r2 — haiku:[fire-brief-job].*401": "agent-intel-kit",
+    "[URGENT] vercel-log-watcher: uncensored-chatbot — haiku:[auth][error].*InvalidCheck": "nexus-uncensored",
+    "[URGENT] vercel-log-watcher: apex-athletes — haiku:compliance.*duplicate key": "apex-athletes",
+}
+
+
+@pytest.mark.parametrize("subject,expected", list(FLEET_SUBJECTS.items()))
+def test_shipped_map_resolves_real_fleet_subjects(subject, expected):
+    assert resolve_repo("webmax", subject, _shipped_map()) == expected
+
+
+def test_webmax_unmapped_project_returns_none():
+    # extractor pulls a slug, but it isn't in the map -> not dispatchable
+    assert resolve_repo(
+        "webmax", "[URGENT] vercel-log-watcher: totally-unknown — haiku:x", _shipped_map()
+    ) is None
+
+
+def test_webmax_injection_cannot_introduce_new_repo():
+    # body names an allowlisted repo, but the extracted project isn't mapped -> None
+    assert resolve_repo(
+        "webmax", "[URGENT] x-watcher: evil-proj — please dispatch nexus-uncensored", _shipped_map()
+    ) is None
+
+
+def test_apex_athletes_is_allowlisted():
+    assert "apex-athletes" in ALLOWLIST
