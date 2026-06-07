@@ -181,3 +181,8 @@ def test_secret_agent_vm_dropped_from_allowlist():
     assert "secret-agent-vm" not in ALLOWLIST
     # a fleet subject naming it cannot resolve to a fixer target
     assert resolve_repo("webmax", "[URGENT] x-watcher: secret-agent-vm — y", _shipped_map()) is None
+
+
+def test_boe_generator_fleet_mapping_resolves():
+    assert resolve_repo("webmax", "[URGENT] vercel-log-watcher: boe-generator — haiku:duplicate key",
+                        _shipped_map()) == "boe-generator"
