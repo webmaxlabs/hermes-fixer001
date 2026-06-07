@@ -1,12 +1,14 @@
 # inbox-watcher classification rules. Matched against "subject\nbody-snippet".
-# Evaluated urgent -> notable -> ignore; first match wins.
+# Evaluated urgent -> notable -> ignore; first match wins (and in file order within a tier).
 # Tiers map to priority: urgent=P1, notable=P2; unmatched authenticated mail=P3.
+#
+# CONTRACT: the only mail that arrives is fleet relays (alerts@webmaxlabs.com relaying the
+# watcher fleet). Rules match the watchers' actual subjects. We do NOT keep rules for sources
+# with no live feed — no native vercel.com/stripe.com/github.com mail ever arrives, so such
+# rules can never fire and only create false confidence. New classes arrive WITH their source
+# (self-healing program P2 adds client_error + payment_failed once those feeds exist).
+# Specific rules first (distinct rule_id => distinct error_signature + fix_hint); catch-all last.
 urgent:
-  # --- Fleet escalations (the real, only input). Mail from alerts@webmaxlabs.com
-  #     relays the watcher fleet; subject = "[URGENT] <watcher>: <project> — haiku:<pat>".
-  #     Specific rules first (distinct rule_id => distinct error_signature + fix_hint),
-  #     catch-all last. Plain "<watcher> digest — N findings" mail lacks [URGENT] and
-  #     stays P3 (notify-only). ---
   - id: fleet_auth_failure
     match: '(?i)\[urgent\].*(?:\b401\b|\b403\b|\[auth\]|invalidcheck|unauthorized|forbidden)'
     description: Fleet escalation — auth/permission failure
@@ -16,37 +18,20 @@ urgent:
     description: Fleet escalation — database integrity/constraint error
     fix_hint: Make the write idempotent (upsert or conflict-handling); respect the unique constraint rather than removing it.
     fixer: true
+  - id: fleet_site_down
+    match: '(?i)\[urgent\].*uptime-watcher.*\bdown\b'
+    description: Fleet escalation — monitored site/endpoint is DOWN
+  - id: fleet_cert_expiry
+    match: '(?i)\[urgent\].*cert_expiry'
+    description: Fleet escalation — SSL certificate expired or expiring imminently
   - id: fleet_urgent
     match: '(?i)\[urgent\].*watcher'
     description: Fleet escalation (uncategorized urgent)
     fix_hint: Investigate the error named in the alert subject for the named project; reproduce and fix the root cause with a minimal change.
-  - id: vercel_deploy_failed
-    match: "(?i)(deployment .*failed|build failed|deploy(ment)? error)"
-    description: Vercel deployment or build failed
-    fix_hint: Reproduce the failing build locally, fix the compile/build error, keep the change minimal.
-  - id: stripe_payment_failed
-    match: "(?i)(payment failed|invoice payment failed|card was declined|subscription .*past due)"
-    description: Stripe payment/subscription failure
-  - id: stripe_key_or_account
-    match: "(?i)(account .*restricted|api key .*(expired|revoked|rotated)|unable to process charges)"
-    description: Stripe account/key problem
-  - id: uptime_down
-    match: "(?i)(is down|monitor .*down|site .*unreachable|service .*unavailable|incident opened)"  # TODO(task14): broad — tune against real mail
-    description: Uptime monitor reports an outage
 notable:
-  - id: stripe_dispute
-    match: "(?i)(dispute|chargeback)"
-    description: Stripe dispute/chargeback opened
-  - id: github_security_alert
-    match: "(?i)(dependabot|security (alert|advisory|vulnerability)|known vulnerabilit)"
-    description: GitHub security advisory / Dependabot
-  - id: github_failed_workflow
-    match: "(?i)(workflow run failed|run failed|ci .*failed|checks failed)"  # TODO(task14): broad — tune against real mail
-    description: GitHub Actions workflow failure
-    fix_hint: Run the failing CI job's command locally, fix the failing test or lint, do not edit the workflow file.
-  - id: usage_or_billing
-    match: "(?i)(usage .*(limit|exceeded)|billing|spending limit|over your plan)"  # TODO(task14): broad — tune against real mail
-    description: Billing / usage threshold
+  - id: fleet_cert_expiry_warn
+    match: '(?i)cert_expiry'
+    description: SSL certificate expiring within the warning window
 ignore:
   - "(?i)unsubscribe"
   - "(?i)(newsletter|product update|what's new|weekly digest)"
