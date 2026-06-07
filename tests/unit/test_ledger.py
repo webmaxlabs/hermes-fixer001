@@ -45,7 +45,6 @@ def test_open_signatures_excludes_closed(tmp_path):
 
 
 def test_record_status_pr_url_and_close(tmp_path):
-    from inbox_watcher.ledger import DispatchLedger
     p = tmp_path / "d.jsonl"
     led = DispatchLedger(p)
     led.record(error_signature="sig1", repo="r", rule_id="x", priority="P1",
@@ -57,5 +56,11 @@ def test_record_status_pr_url_and_close(tmp_path):
     assert folded["status"] == "opened" and folded["pr_url"] == "https://pr/1"
     assert folded["open"] is True
     led.record(error_signature="sig1", repo="r", rule_id="x", priority="P1",
+               mode="live", now="t1b")  # skip-path touch, no status
+    assert led.fold()["sig1"]["status"] == "opened"   # carried forward, not reset
+    assert led.fold()["sig1"]["pr_url"] == "https://pr/1"
+    led.record(error_signature="sig1", repo="r", rule_id="x", priority="P1",
                mode="live", now="t2", status="closed", open=False)
     assert led.open_signatures() == set()
+    closed = led.fold()["sig1"]
+    assert closed["status"] == "closed" and closed["pr_url"] == "https://pr/1"
