@@ -147,26 +147,75 @@ def dispatch_cycle(*, findings_rows, ledger: DispatchLedger, fix_hints, secret,
     return counts
 
 
-def main() -> int:
+def _build_fixer_run(cfg, rule_meta):
+    from inbox_watcher.fixer import run_fixer, FixerDeps
+    from inbox_watcher import gitops, codex_runner, github_pr
+    from inbox_watcher.ledger import DispatchLedger
+    ledger = DispatchLedger(cfg.dispatch_ledger_path)
+    deps = FixerDeps(
+        clone=gitops.clone, run_codex=codex_runner.run_codex, has_changes=gitops.has_changes,
+        commit_branch_push=gitops.commit_branch_push, open_draft_pr=github_pr.open_draft_pr,
+        ledger=ledger, rule_meta=rule_meta, workdir=cfg.fixer_workdir, lock_path=cfg.fixer_lock_path,
+        owner=cfg.fixer_default_owner, base="main", labels=cfg.fixer_pr_labels,
+        token=cfg.github_token, codex_bin=cfg.codex_bin, timeout_sec=cfg.codex_timeout_sec)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    return lambda envelope: run_fixer(envelope["payload"], deps=deps, now=now_iso)
+
+
+def main(argv=None) -> int:
+    import sys
+    argv = sys.argv[1:] if argv is None else argv
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s %(message)s")
     cfg = Config.load()
+    if cfg.dispatch_mode not in VALID_MODES:
+        log.error("invalid DISPATCH_MODE %r (allowed: %s); fail-closed", cfg.dispatch_mode, sorted(VALID_MODES))
+        return 2
     if not cfg.dispatch_secret:
         log.error("HERMES_FIXER_DISPATCH_SECRET is empty; refusing to dispatch (fail-closed)")
         return 2
+    if cfg.dispatch_mode == "live" and not cfg.github_token:
+        log.error("DISPATCH_MODE=live requires GITHUB_TOKEN; refusing to dispatch (fail-closed)")
+        return 2
+    if "--reconcile" in argv:
+        return _reconcile(cfg)
     run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     rows = InboxFindingsWriter.read_day(cfg.findings_dir, run_date)
     ledger = DispatchLedger(cfg.dispatch_ledger_path)
-    fix_hints = load_fix_hints(cfg.rules_path)
+    rule_meta = load_rule_meta(cfg.rules_path)
+    fix_hints = {rid: m["fix_hint"] for rid, m in rule_meta.items() if m.get("fix_hint")}
     now = datetime.now(timezone.utc).isoformat()
 
     def emit(envelope):
         log.info("DRY-RUN dispatch envelope: %s", json.dumps(envelope, separators=(",", ":")))
 
+    fixer_run = _build_fixer_run(cfg, rule_meta) if cfg.dispatch_mode == "live" else None
     res = dispatch_cycle(findings_rows=rows, ledger=ledger, fix_hints=fix_hints,
-                         secret=cfg.dispatch_secret, mode=cfg.dispatch_mode,
-                         emit=emit, now=now)
+                         secret=cfg.dispatch_secret, mode=cfg.dispatch_mode, emit=emit, now=now,
+                         fixer_run=fixer_run, fixer_eligible=fixer_eligible_rule_ids(rule_meta))
     log.info("dispatch complete: %s (mode=%s)", res, cfg.dispatch_mode)
+    return 0
+
+
+def _reconcile(cfg) -> int:
+    from inbox_watcher import github_pr
+    from inbox_watcher.ledger import DispatchLedger
+    ledger = DispatchLedger(cfg.dispatch_ledger_path)
+    now = datetime.now(timezone.utc).isoformat()
+    closed = 0
+    for sig, row in ledger.fold().items():
+        if row.get("open") and row.get("status") == "opened" and row.get("pr_url"):
+            try:
+                state = github_pr.get_pr_state(row["pr_url"], token=cfg.github_token)
+            except Exception as exc:
+                log.warning("reconcile: cannot read %s: %s", row["pr_url"], exc)
+                continue
+            if state in ("merged", "closed"):
+                ledger.record(error_signature=sig, repo=row["repo"], rule_id=row["rule_id"],
+                              priority=row["priority"], mode="live", now=now,
+                              status=state, pr_url=row["pr_url"], open=False)
+                closed += 1
+    log.info("reconcile complete: closed=%d", closed)
     return 0
 
 

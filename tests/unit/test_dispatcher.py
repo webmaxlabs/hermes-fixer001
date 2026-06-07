@@ -174,6 +174,30 @@ def test_live_per_finding_isolation(tmp_path):
     assert res["considered"] == 1
 
 
+class _FakeCfg:
+    def __init__(self, tmp_path, mode="dry_run"):
+        self.dispatch_secret = "s"; self.dispatch_mode = mode
+        self.findings_dir = tmp_path; self.dispatch_ledger_path = tmp_path / "d.jsonl"
+        self.rules_path = tmp_path / "rules.yaml"; self.rules_path.write_text("urgent: []\n")
+        self.codex_bin = "codex"; self.codex_timeout_sec = 60; self.github_token = ""
+        self.fixer_pr_labels = ["hermes-fixer"]; self.fixer_default_owner = "webmaxlabs"
+        self.fixer_workdir = tmp_path / "w"; self.fixer_lock_path = tmp_path / "l"
+
+
+def test_main_rejects_unknown_mode(tmp_path, monkeypatch):
+    import inbox_watcher.dispatcher as D
+    from inbox_watcher.config import Config
+    monkeypatch.setattr(Config, "load", staticmethod(lambda **kw: _FakeCfg(tmp_path, mode="frobnicate")))
+    assert D.main() == 2   # fail-closed on bad mode
+
+
+def test_main_live_without_token_fails_closed(tmp_path, monkeypatch):
+    import inbox_watcher.dispatcher as D
+    from inbox_watcher.config import Config
+    monkeypatch.setattr(Config, "load", staticmethod(lambda **kw: _FakeCfg(tmp_path, mode="live")))
+    assert D.main() == 2   # live requires GITHUB_TOKEN (fail-closed); _FakeCfg has github_token=""
+
+
 def test_main_fails_closed_without_secret(tmp_path, monkeypatch):
     # CORRECTED: capture the original classmethod and delegate to a tmp env file,
     # rather than the plan's recursive lambda (which infinite-loops).
