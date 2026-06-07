@@ -37,7 +37,7 @@ class FixerDeps:
 
 def run_fixer(payload: dict[str, Any], *, deps: FixerDeps, now: str) -> str:
     deps.lock_path.parent.mkdir(parents=True, exist_ok=True)
-    lock_fh = open(deps.lock_path, "w")
+    lock_fh = open(deps.lock_path, "w")  # flock guards by fd; 'w' truncation is harmless
     try:
         try:
             fcntl.flock(lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -67,7 +67,7 @@ def _run_locked(payload: dict[str, Any], *, deps: FixerDeps, now: str) -> str:
     # record-before-emit: mark open BEFORE any irreversible action
     _record("in_progress")
 
-    clone_dir = deps.workdir / sig[:12]
+    clone_dir = deps.workdir / sig[:12]   # sig is a sha256 hexdigest => path-safe
     if clone_dir.exists():
         shutil.rmtree(clone_dir, ignore_errors=True)
     deps.workdir.mkdir(parents=True, exist_ok=True)
@@ -77,6 +77,9 @@ def _run_locked(payload: dict[str, Any], *, deps: FixerDeps, now: str) -> str:
                                     fix_hint=meta.get("fix_hint"))
         result = deps.run_codex(clone_dir=clone_dir, prompt=prompt,
                                 timeout_sec=deps.timeout_sec, codex_bin=deps.codex_bin)
+        if not result.ok:
+            log.warning("codex failed for %s/%s: %s", repo, sig[:12], (result.stderr or "")[:200])
+            raise RuntimeError(f"codex exited non-zero for {repo}/{sig[:12]}")
         if not deps.has_changes(clone_dir):
             _record("no_fix")
             return "no_fix"

@@ -1,5 +1,5 @@
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from inbox_watcher.fixer import run_fixer, FixerDeps
 from inbox_watcher.ledger import DispatchLedger
 
@@ -59,7 +59,7 @@ def test_records_in_progress_before_acting(tmp_path):
     # if codex fails, the signature is already open (record-before-emit) so it won't retry
     deps, rec, led = _deps(tmp_path, changes=False, codex_ok=False)
     status = run_fixer(_payload(), deps=deps, now="t0")
-    assert status in ("no_fix", "error")
+    assert status == "error"  # new guard rejects failed codex before has_changes
     assert "sig1" in led.open_signatures()
 
 
@@ -69,5 +69,23 @@ def test_lock_held_skips(tmp_path):
     fh = open(deps.lock_path, "w"); fcntl.flock(fh, fcntl.LOCK_EX)
     try:
         assert run_fixer(_payload(), deps=deps, now="t0") == "skipped_locked"
+        assert led.fold() == {}  # nothing recorded before the lock is acquired
     finally:
         fcntl.flock(fh, fcntl.LOCK_UN); fh.close()
+
+
+def test_codex_failure_returns_error_and_leaves_open(tmp_path):
+    deps, rec, led = _deps(tmp_path, changes=True, codex_ok=False)
+    status = run_fixer(_payload(), deps=deps, now="t0")
+    assert status == "error"
+    assert rec["pr"] == []                      # no PR on a failed codex run
+    assert "sig1" in led.open_signatures()      # left open, no retry
+
+
+def test_clone_failure_returns_error_and_leaves_open(tmp_path):
+    deps, rec, led = _deps(tmp_path, changes=False)
+    def bad_clone(url, dest, **kw): raise RuntimeError("network failure")
+    deps = replace(deps, clone=bad_clone)
+    status = run_fixer(_payload(), deps=deps, now="t0")
+    assert status == "error"
+    assert "sig1" in led.open_signatures()
