@@ -211,3 +211,51 @@ def test_main_fails_closed_without_secret(tmp_path, monkeypatch):
                         classmethod(lambda cls, env_file=None: orig(cls, env_file=env)))
     rc = d.main()
     assert rc == 2  # fail-closed exit code
+
+
+def test_reconcile_closes_merged_pr(tmp_path, monkeypatch):
+    from inbox_watcher.dispatcher import _reconcile
+    from inbox_watcher.ledger import DispatchLedger
+    import inbox_watcher.github_pr as ghpr
+    led = DispatchLedger(tmp_path / "d.jsonl")
+    led.record(error_signature="sig1", repo="r", rule_id="x", priority="P1",
+               mode="live", now="t0", status="opened", pr_url="https://github.com/o/r/pull/1")
+    monkeypatch.setattr(ghpr, "get_pr_state", lambda url, *, token: "merged")
+    cfg = _FakeCfg(tmp_path, mode="live"); cfg.github_token = "tok"
+    assert _reconcile(cfg) == 0
+    row = led.fold()["sig1"]
+    assert row["open"] is False and row["status"] == "merged"
+
+
+def test_reconcile_leaves_open_pr_open(tmp_path, monkeypatch):
+    from inbox_watcher.dispatcher import _reconcile
+    from inbox_watcher.ledger import DispatchLedger
+    import inbox_watcher.github_pr as ghpr
+    led = DispatchLedger(tmp_path / "d.jsonl")
+    led.record(error_signature="sig1", repo="r", rule_id="x", priority="P1",
+               mode="live", now="t0", status="opened", pr_url="https://github.com/o/r/pull/1")
+    monkeypatch.setattr(ghpr, "get_pr_state", lambda url, *, token: "open")
+    cfg = _FakeCfg(tmp_path, mode="live"); cfg.github_token = "tok"
+    assert _reconcile(cfg) == 0
+    assert led.fold()["sig1"]["open"] is True   # still open, not closed
+
+
+def test_reconcile_isolates_get_state_errors(tmp_path, monkeypatch):
+    from inbox_watcher.dispatcher import _reconcile
+    from inbox_watcher.ledger import DispatchLedger
+    import inbox_watcher.github_pr as ghpr
+    led = DispatchLedger(tmp_path / "d.jsonl")
+    led.record(error_signature="sig1", repo="r", rule_id="x", priority="P1",
+               mode="live", now="t0", status="opened", pr_url="https://github.com/o/r/pull/1")
+    def boom(url, *, token): raise RuntimeError("api down")
+    monkeypatch.setattr(ghpr, "get_pr_state", boom)
+    cfg = _FakeCfg(tmp_path, mode="live"); cfg.github_token = "tok"
+    assert _reconcile(cfg) == 0                 # error isolated, did not raise
+    assert led.fold()["sig1"]["open"] is True   # untouched
+
+
+def test_main_reconcile_without_token_fails_closed(tmp_path, monkeypatch):
+    import inbox_watcher.dispatcher as D
+    from inbox_watcher.config import Config
+    monkeypatch.setattr(Config, "load", staticmethod(lambda **kw: _FakeCfg(tmp_path, mode="dry_run")))
+    assert D.main(["--reconcile"]) == 2   # _FakeCfg github_token="" => fail-closed

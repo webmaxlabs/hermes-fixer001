@@ -178,6 +178,9 @@ def main(argv=None) -> int:
         log.error("DISPATCH_MODE=live requires GITHUB_TOKEN; refusing to dispatch (fail-closed)")
         return 2
     if "--reconcile" in argv:
+        if not cfg.github_token:
+            log.error("--reconcile requires GITHUB_TOKEN; refusing (fail-closed)")
+            return 2
         return _reconcile(cfg)
     run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     rows = InboxFindingsWriter.read_day(cfg.findings_dir, run_date)
