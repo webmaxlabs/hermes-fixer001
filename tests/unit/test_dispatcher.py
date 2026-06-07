@@ -98,24 +98,24 @@ def test_dispatch_cycle_emits_actionable_and_skips_repeat(tmp_path):
     ]
     res = dispatch_cycle(findings_rows=rows, ledger=led, fix_hints={}, secret="s",
                          mode="dry_run", emit=emitted.append, now="t0")
-    assert res == {"dispatched": 1, "skipped": 0, "considered": 1}
+    assert res["dispatched"] == 1 and res["skipped"] == 0 and res["considered"] == 1
     assert len(emitted) == 1 and emitted[0]["alg"] == "HMAC-SHA256"
 
     # Second pass over the same actionable finding -> skipped (idempotent).
     res2 = dispatch_cycle(findings_rows=[FINDING], ledger=led, fix_hints={}, secret="s",
                           mode="dry_run", emit=emitted.append, now="t1")
-    assert res2 == {"dispatched": 0, "skipped": 1, "considered": 1}
+    assert res2["dispatched"] == 0 and res2["skipped"] == 1 and res2["considered"] == 1
     assert len(emitted) == 1  # nothing new emitted
 
 
-def test_dispatch_cycle_live_mode_is_guarded(tmp_path):
-    import pytest
+def test_live_without_eligible_does_nothing(tmp_path):
     from inbox_watcher.dispatcher import dispatch_cycle
     from inbox_watcher.ledger import DispatchLedger
-    led = DispatchLedger(tmp_path / "dispatched.jsonl")
-    with pytest.raises(NotImplementedError):
-        dispatch_cycle(findings_rows=[FINDING], ledger=led, fix_hints={}, secret="s",
-                       mode="live", emit=lambda e: None, now="t0")
+    led = DispatchLedger(tmp_path / "d.jsonl")
+    res = dispatch_cycle(findings_rows=[_row()], ledger=led, fix_hints={}, secret="s",
+                         mode="live", emit=lambda e: None, now="t0",
+                         fixer_run=lambda e: "opened", fixer_eligible=frozenset())
+    assert res["not_eligible"] == 1 and res["dispatched"] == 0
 
 
 def test_load_rule_meta_and_eligibility(tmp_path):
@@ -140,6 +140,36 @@ def test_load_rule_meta_and_eligibility(tmp_path):
 def test_valid_modes():
     from inbox_watcher.dispatcher import VALID_MODES
     assert VALID_MODES == frozenset({"dry_run", "live"})
+
+
+def _row(repo="agent-intel-kit", rule="fleet_db_integrity", pri="P1"):
+    return {"priority": pri, "repo": repo, "rule_id": rule, "summary": "s", "message_id": "<m>"}
+
+
+def test_live_calls_fixer_only_for_eligible(tmp_path):
+    from inbox_watcher.dispatcher import dispatch_cycle
+    from inbox_watcher.ledger import DispatchLedger
+    led = DispatchLedger(tmp_path / "d.jsonl")
+    fired = []
+    rows = [_row(rule="fleet_db_integrity"), _row(rule="fleet_auth_failure")]
+    res = dispatch_cycle(findings_rows=rows, ledger=led, fix_hints={}, secret="s",
+                         mode="live", emit=lambda e: None, now="t0",
+                         fixer_run=lambda env: fired.append(env["payload"]["rule_id"]) or "opened",
+                         fixer_eligible={"fleet_db_integrity"})
+    assert fired == ["fleet_db_integrity"]            # auth not eligible -> not fired
+    assert res["dispatched"] == 1
+
+
+def test_live_per_finding_isolation(tmp_path):
+    from inbox_watcher.dispatcher import dispatch_cycle
+    from inbox_watcher.ledger import DispatchLedger
+    led = DispatchLedger(tmp_path / "d.jsonl")
+    def boom(env):
+        raise RuntimeError("codex blew up")
+    res = dispatch_cycle(findings_rows=[_row()], ledger=led, fix_hints={}, secret="s",
+                         mode="live", emit=lambda e: None, now="t0",
+                         fixer_run=boom, fixer_eligible={"fleet_db_integrity"})
+    assert res["errors"] == 1   # isolated, did not raise
 
 
 def test_main_fails_closed_without_secret(tmp_path, monkeypatch):

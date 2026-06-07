@@ -105,33 +105,46 @@ def fixer_eligible_rule_ids(rule_meta: dict[str, dict[str, Any]]) -> set[str]:
 
 
 def dispatch_cycle(*, findings_rows, ledger: DispatchLedger, fix_hints, secret,
-                   mode, emit, now) -> dict[str, int]:
-    # NB: no per-finding try/except here (unlike run_cycle). In Phase A `emit` only
-    # logs, so a ledger.record() failure mid-cycle is harmless — the next run re-emits
-    # the (idempotent) dry-run log line and nothing irreversible happened. Phase B,
-    # where `emit` opens a real PR, MUST add per-finding isolation and record-before-emit
-    # (or a compensating action) so a crash between emit and record can't double-dispatch.
+                   mode, emit, now, fixer_run=None, fixer_eligible=frozenset()) -> dict[str, int]:
     open_sigs = ledger.open_signatures()
-    dispatched = skipped = considered = 0
+    counts = {"dispatched": 0, "skipped": 0, "considered": 0, "errors": 0, "not_eligible": 0}
     for f in findings_rows:
         if not is_actionable(f):
             continue
-        considered += 1
+        counts["considered"] += 1
         sig = error_signature(f["repo"], f["rule_id"])
         if sig in open_sigs:
-            skipped += 1
+            counts["skipped"] += 1
             ledger.record(error_signature=sig, repo=f["repo"], rule_id=f["rule_id"],
                           priority=f["priority"], mode=mode, now=now)  # touch row
             continue
-        if mode == "live":
-            raise NotImplementedError("live dispatch is Phase B")
-        payload = build_payload(f, fix_hint=fix_hints.get(f["rule_id"]), now=now)
-        emit(make_envelope(payload, secret))
-        ledger.record(error_signature=sig, repo=f["repo"], rule_id=f["rule_id"],
-                      priority=f["priority"], mode=mode, now=now)
-        open_sigs.add(sig)
-        dispatched += 1
-    return {"dispatched": dispatched, "skipped": skipped, "considered": considered}
+        if mode == "dry_run":
+            payload = build_payload(f, fix_hint=fix_hints.get(f["rule_id"]), now=now)
+            emit(make_envelope(payload, secret))
+            ledger.record(error_signature=sig, repo=f["repo"], rule_id=f["rule_id"],
+                          priority=f["priority"], mode=mode, now=now)
+            open_sigs.add(sig)
+            counts["dispatched"] += 1
+        elif mode == "live":
+            if f["rule_id"] not in fixer_eligible:
+                counts["not_eligible"] += 1
+                continue
+            payload = build_payload(f, fix_hint=fix_hints.get(f["rule_id"]), now=now)
+            try:
+                status = fixer_run(make_envelope(payload, secret))  # owns record-before-emit
+            except Exception as exc:                                # per-finding isolation
+                log.warning("fixer_run crashed for %s: %s", sig[:12], exc)
+                counts["errors"] += 1
+                open_sigs.add(sig)   # in_progress was recorded by fixer; don't retry this cycle
+                continue
+            if status == "skipped_locked":
+                counts["skipped"] += 1
+            else:                                                   # opened | no_fix | error
+                open_sigs.add(sig)
+                counts["dispatched"] += 1
+        else:
+            raise ValueError(f"invalid DISPATCH_MODE: {mode}")
+    return counts
 
 
 def main() -> int:
