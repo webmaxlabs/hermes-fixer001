@@ -70,6 +70,8 @@ def make_envelope(payload: dict[str, Any], secret: str) -> dict[str, Any]:
 def load_fix_hints(rules_path: Path) -> dict[str, str]:
     """Map rule_id -> fix_hint from rules.yaml. fix_hint is deterministic, OUR text,
     never email-derived. Rules without a fix_hint are omitted."""
+    # NOTE: load_rule_meta() is a superset of this. Prefer it for new callers;
+    # this remains for dispatch_cycle's existing fix_hints param.
     if not rules_path.exists():
         return {}
     data = yaml.safe_load(rules_path.read_text()) or {}

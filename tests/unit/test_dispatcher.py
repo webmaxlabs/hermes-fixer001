@@ -126,11 +126,14 @@ def test_load_rule_meta_and_eligibility(tmp_path):
         "  - id: fleet_db_integrity\n    match: x\n    description: DB integrity\n"
         "    fix_hint: make idempotent\n    fixer: true\n"
         "  - id: fleet_auth_failure\n    match: y\n    description: auth\n    fix_hint: rotate\n"
+        "  - id: fleet_no_hint\n    match: z\n    description: no hint\n"
     )
     meta = load_rule_meta(rules)
     assert meta["fleet_db_integrity"]["description"] == "DB integrity"
+    assert meta["fleet_db_integrity"]["fix_hint"] == "make idempotent"
     assert meta["fleet_db_integrity"]["fixer"] is True
     assert meta["fleet_auth_failure"]["fixer"] is False
+    assert meta["fleet_no_hint"]["fix_hint"] is None
     assert fixer_eligible_rule_ids(meta) == {"fleet_db_integrity"}
 
 
