@@ -106,7 +106,7 @@ def test_main_builds_resolver_from_repo_map(tmp_path, monkeypatch):
 
 
 def test_fixer_config_defaults(tmp_path, monkeypatch):
-    for v in ("CODEX_BIN", "CODEX_TIMEOUT_SEC", "GITHUB_TOKEN", "FIXER_PR_LABELS", "FIXER_DEFAULT_OWNER"):
+    for v in ("CODEX_BIN", "CODEX_TIMEOUT_SEC", "GITHUB_TOKEN", "FIXER_PR_LABELS", "FIXER_DEFAULT_OWNER", "FIXER_WORKDIR", "FIXER_LOCK_PATH"):
         monkeypatch.delenv(v, raising=False)
     env = tmp_path / ".env"
     env.write_text("AGENTMAIL_API_KEY=k\nSLACK_BOT_TOKEN=t\nHERMES_FIXER_DISPATCH_SECRET=s\n")
@@ -116,4 +116,5 @@ def test_fixer_config_defaults(tmp_path, monkeypatch):
     assert cfg.fixer_default_owner == "webmaxlabs"
     assert cfg.fixer_pr_labels == ["hermes-fixer"]
     assert cfg.github_token == ""            # optional; only required in live
+    assert cfg.fixer_workdir.name == "fixer-work"
     assert cfg.fixer_lock_path.name == "fixer.lock"
