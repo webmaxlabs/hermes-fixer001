@@ -8,6 +8,10 @@ from __future__ import annotations
 
 
 def build_fixer_prompt(*, repo: str, rule_description: str, fix_hint: str | None) -> str:
+    repo = repo[:200].replace("\n", " ").replace("\r", " ")
+    rule_description = rule_description[:300].replace("\n", " ").replace("\r", " ")
+    if fix_hint:
+        fix_hint = fix_hint[:500].replace("\n", " ").replace("\r", " ")
     hint = f"\nSuggested approach: {fix_hint}" if fix_hint else ""
     return (
         f"A monitored production error of class \"{rule_description}\" was reported "

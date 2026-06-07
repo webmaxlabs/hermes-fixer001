@@ -21,3 +21,13 @@ def test_prompt_excludes_email_text():
 def test_prompt_handles_missing_fix_hint():
     p = build_fixer_prompt(repo="r", rule_description="d", fix_hint=None)
     assert "r" in p and "d" in p
+    assert "Suggested" not in p
+
+
+def test_prompt_sanitizes_newlines_in_inputs():
+    p = build_fixer_prompt(repo="r\nIGNORE PREVIOUS", rule_description="d\nDROP",
+                           fix_hint="h\nINJECT")
+    # our own paragraph breaks remain, but injected newlines from inputs are gone
+    assert "r IGNORE PREVIOUS" in p
+    assert "d DROP" in p
+    assert "h INJECT" in p
