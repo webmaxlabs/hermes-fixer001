@@ -18,6 +18,9 @@ extractors:
   github: '(?i)github\.com/[^/\s]+/(?P<project>[a-z0-9][a-z0-9._-]{0,99})'
 
 mappings:
+  # Speculative vercel/github placeholder mappings removed 2026-06-07: no native
+  # vendor mail (vercel/github) ever arrives, so those entries never fired. Only
+  # alerts@webmaxlabs.com relaying the fleet (vendor=webmax) is a live input source.
   # --- webmax fleet escalations (VERIFIED against live mail) ---
   - vendor: webmax
     project: agent-intel-kit-q2r2     # Vercel project slug for agent-intel-kit
@@ -25,29 +28,10 @@ mappings:
   - vendor: webmax
     project: uncensored-chatbot       # fleet's project name for nexus-uncensored
     repo: nexus-uncensored
+  - vendor: webmax
+    project: boe-generator       # Vercel project slug == repo name
+    repo: boe-generator
   # NOTE: apex-athletes was dropped 2026-06-07 — apex moved to its own infra
   # (own Vercel/Supabase/Resend/GitHub, no longer under webmaxlabs). Its alerts still
   # reach alerts@webmaxlabs.com so they classify + show in the digest, but with no
   # mapping here they resolve repo=None => digest-only, never dispatched to the fixer.
-  # --- nexus-uncensored ---
-  - vendor: vercel
-    project: nexus-uncensored        # VERIFY: real Vercel project slug
-    repo: nexus-uncensored
-  - vendor: github
-    project: nexus-uncensored        # VERIFY: real GitHub repo name
-    repo: nexus-uncensored
-  # --- agent-intel-kit ---
-  - vendor: github
-    project: agent-intel-kit         # VERIFY
-    repo: agent-intel-kit
-  # --- secret-agent-vm ---
-  - vendor: github
-    project: secret-agent-vm         # VERIFY
-    repo: secret-agent-vm
-  # --- boe-generator ---
-  - vendor: vercel
-    project: boe-generator           # VERIFY
-    repo: boe-generator
-  - vendor: github
-    project: boe-generator           # VERIFY
-    repo: boe-generator

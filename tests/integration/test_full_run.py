@@ -51,9 +51,14 @@ def test_end_to_end_classifies_and_quarantines_spoof(tmp_path: Path):
 
     rows = InboxFindingsWriter.read_day(tmp_path / "findings", "2026-06-02")
     by_id = {r["message_id"]: r for r in rows}
-    assert by_id["m1"]["priority"] == "P1"
-    assert by_id["m2"]["priority"] == "P2"
-    assert by_id["m3"]["priority"] == "P3"        # matches no urgent/notable and no ignore rule -> unclassified P3
+    # Native vendor mail (vercel.com, stripe.com, github.com) never arrives in production —
+    # only fleet relays from alerts@webmaxlabs.com do. Rules for those sources were removed.
+    # All three messages here are native-vendor subjects with no matching fleet rule → P3.
+    assert by_id["m1"]["priority"] == "P3"        # "Deployment to production failed" — no fleet rule fires
+    assert by_id["m1"]["rule_id"] == "unclassified"
+    assert by_id["m2"]["priority"] == "P3"        # "A payment has been disputed" — no fleet rule fires
+    assert by_id["m2"]["rule_id"] == "unclassified"
+    assert by_id["m3"]["priority"] == "P3"        # "Repository access changed..." — no fleet rule fires
     assert by_id["m3"]["rule_id"] == "unclassified"
     assert "spoof" not in by_id                    # dkim=fail spoof never reached findings
-    assert summary["P1"] == 1 and summary["P2"] == 1 and summary["P3"] == 1
+    assert summary["P1"] == 0 and summary["P2"] == 0 and summary["P3"] == 3
