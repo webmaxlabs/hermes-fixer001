@@ -6,7 +6,7 @@
 # watcher fleet). Rules match the watchers' actual subjects. We do NOT keep rules for sources
 # with no live feed — no native vercel.com/stripe.com/github.com mail ever arrives, so such
 # rules can never fire and only create false confidence. New classes arrive WITH their source
-# (self-healing program P2 adds client_error + payment_failed once those feeds exist).
+# (self-healing program P2 adds stripe_error via stripe-watcher; client_error follows in P2b).
 # Specific rules first (distinct rule_id => distinct error_signature + fix_hint); catch-all last.
 urgent:
   - id: fleet_auth_failure
@@ -24,6 +24,10 @@ urgent:
   - id: fleet_cert_expiry
     match: '(?i)\[urgent\].*cert_expiry'
     description: Fleet escalation — SSL certificate expired or expiring imminently
+  - id: fleet_stripe_error
+    match: '(?i)\[urgent\].*stripe-watcher.*stripe_error'
+    description: Fleet escalation — Stripe functionality/integration error (not a customer decline)
+    fix_hint: Investigate the Stripe error named in the subject (revoked key, processing/config error, finalization failure) for the named project; fix the integration/config — never weaken or bypass Stripe verification.
   - id: fleet_urgent
     match: '(?i)\[urgent\].*watcher'
     description: Fleet escalation (uncategorized urgent)

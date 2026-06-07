@@ -26,6 +26,8 @@ TAXONOMY_CASES = [
     ("[URGENT] uptime-watcher: agentintelkit DOWN — request error", "fleet_site_down", "urgent"),
     ("[URGENT] uptime-watcher: cert-expiry — cert_expiry:2d", "fleet_cert_expiry", "urgent"),
     ("uptime-watcher: cert-expiry — cert_expiry:11d", "fleet_cert_expiry_warn", "notable"),
+    ("[URGENT] stripe-watcher: agent-intel-kit — stripe_error:charge_failed:processing_error",
+     "fleet_stripe_error", "urgent"),
     ("[URGENT] some-watcher: y — haiku:whatever", "fleet_urgent", "urgent"),
 ]
 
@@ -34,6 +36,20 @@ TAXONOMY_CASES = [
 def test_taxonomy_classification(subject, rule_id, tier):
     r = _matcher().match(subject)
     assert r is not None and r.rule_id == rule_id and r.tier == tier
+
+
+def test_stripe_error_is_notify_only():
+    import yaml
+    data = yaml.safe_load(RULES_PATH.read_text())
+    rule = next(e for e in data["urgent"] if e["id"] == "fleet_stripe_error")
+    assert "fixer" not in rule  # notify-only: a revoked key / Stripe-side failure is human-investigated
+
+
+def test_stripe_decline_subject_is_never_emitted_so_no_rule_matches_declines():
+    # sanity: a plain decline never reaches inbox-watcher (stripe-watcher suppresses it),
+    # and no rule should accidentally classify the word "card_declined" as urgent.
+    r = _matcher().match("Re: card_declined on my personal card")
+    assert r is None
 
 
 def test_cert_warn_requires_uptime_watcher_anchor():
