@@ -36,6 +36,12 @@ def test_taxonomy_classification(subject, rule_id, tier):
     assert r is not None and r.rule_id == rule_id and r.tier == tier
 
 
+def test_cert_warn_requires_uptime_watcher_anchor():
+    # a stray mention of cert_expiry without the watcher anchor must NOT classify as notable
+    r = _matcher().match("Re: some thread mentioning cert_expiry in passing")
+    assert r is None   # falls through to P3 unclassified, not P2
+
+
 def test_vestigial_native_rules_removed():
     import yaml
     data = yaml.safe_load(RULES_PATH.read_text())

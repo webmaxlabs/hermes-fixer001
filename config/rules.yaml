@@ -30,7 +30,7 @@ urgent:
     fix_hint: Investigate the error named in the alert subject for the named project; reproduce and fix the root cause with a minimal change.
 notable:
   - id: fleet_cert_expiry_warn
-    match: '(?i)cert_expiry'
+    match: '(?i)uptime-watcher.*cert_expiry'
     description: SSL certificate expiring within the warning window
 ignore:
   - "(?i)unsubscribe"
