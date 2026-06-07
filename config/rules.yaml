@@ -15,6 +15,7 @@ urgent:
     match: '(?i)\[urgent\].*(?:duplicate key|unique constraint|integrity ?error|constraint violation)'
     description: Fleet escalation — database integrity/constraint error
     fix_hint: Make the write idempotent (upsert or conflict-handling); respect the unique constraint rather than removing it.
+    fixer: true
   - id: fleet_urgent
     match: '(?i)\[urgent\].*watcher'
     description: Fleet escalation (uncategorized urgent)

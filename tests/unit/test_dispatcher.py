@@ -259,3 +259,10 @@ def test_main_reconcile_without_token_fails_closed(tmp_path, monkeypatch):
     from inbox_watcher.config import Config
     monkeypatch.setattr(Config, "load", staticmethod(lambda **kw: _FakeCfg(tmp_path, mode="dry_run")))
     assert D.main(["--reconcile"]) == 2   # _FakeCfg github_token="" => fail-closed
+
+
+def test_shipped_rules_only_db_integrity_is_fixer_eligible():
+    from pathlib import Path
+    from inbox_watcher.dispatcher import load_rule_meta, fixer_eligible_rule_ids
+    meta = load_rule_meta(Path(__file__).resolve().parents[2] / "config" / "rules.yaml")
+    assert fixer_eligible_rule_ids(meta) == {"fleet_db_integrity"}
