@@ -162,3 +162,22 @@ def test_apex_athletes_dropped_from_fixer():
         "[URGENT] vercel-log-watcher: apex-athletes — haiku:compliance.*duplicate key",
         _shipped_map(),
     ) is None
+
+
+def test_speculative_vendor_mappings_removed():
+    rm = _shipped_map()
+    # only webmax fleet mappings remain; no vercel/github placeholder mappings
+    vendors = {vendor for (vendor, _project) in rm.mappings}
+    assert vendors == {"webmax"}, vendors
+
+
+def test_live_webmax_mappings_still_resolve():
+    rm = _shipped_map()
+    assert resolve_repo("webmax", "[URGENT] vercel-log-watcher: agent-intel-kit-q2r2 — x", rm) == "agent-intel-kit"
+    assert resolve_repo("webmax", "[URGENT] vercel-log-watcher: uncensored-chatbot — x", rm) == "nexus-uncensored"
+
+
+def test_secret_agent_vm_dropped_from_allowlist():
+    assert "secret-agent-vm" not in ALLOWLIST
+    # a fleet subject naming it cannot resolve to a fixer target
+    assert resolve_repo("webmax", "[URGENT] x-watcher: secret-agent-vm — y", _shipped_map()) is None
