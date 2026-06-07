@@ -118,6 +118,27 @@ def test_dispatch_cycle_live_mode_is_guarded(tmp_path):
                        mode="live", emit=lambda e: None, now="t0")
 
 
+def test_load_rule_meta_and_eligibility(tmp_path):
+    from inbox_watcher.dispatcher import load_rule_meta, fixer_eligible_rule_ids
+    rules = tmp_path / "rules.yaml"
+    rules.write_text(
+        "urgent:\n"
+        "  - id: fleet_db_integrity\n    match: x\n    description: DB integrity\n"
+        "    fix_hint: make idempotent\n    fixer: true\n"
+        "  - id: fleet_auth_failure\n    match: y\n    description: auth\n    fix_hint: rotate\n"
+    )
+    meta = load_rule_meta(rules)
+    assert meta["fleet_db_integrity"]["description"] == "DB integrity"
+    assert meta["fleet_db_integrity"]["fixer"] is True
+    assert meta["fleet_auth_failure"]["fixer"] is False
+    assert fixer_eligible_rule_ids(meta) == {"fleet_db_integrity"}
+
+
+def test_valid_modes():
+    from inbox_watcher.dispatcher import VALID_MODES
+    assert VALID_MODES == frozenset({"dry_run", "live"})
+
+
 def test_main_fails_closed_without_secret(tmp_path, monkeypatch):
     # CORRECTED: capture the original classmethod and delegate to a tmp env file,
     # rather than the plan's recursive lambda (which infinite-loops).

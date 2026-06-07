@@ -23,6 +23,7 @@ from inbox_watcher.ledger import DispatchLedger
 log = logging.getLogger("inbox_watcher.dispatcher")
 
 ACTIONABLE_PRIORITIES = frozenset({"P1", "P2"})
+VALID_MODES = frozenset({"dry_run", "live"})
 
 PAYLOAD_KEYS = (
     "schema_version", "repo", "rule_id", "priority", "error_signature",
@@ -78,6 +79,27 @@ def load_fix_hints(rules_path: Path) -> dict[str, str]:
             if isinstance(entry, dict) and entry.get("id") and entry.get("fix_hint"):
                 hints[entry["id"]] = str(entry["fix_hint"])
     return hints
+
+
+def load_rule_meta(rules_path: Path) -> dict[str, dict[str, Any]]:
+    """rule_id -> {description, fix_hint, fixer}. OUR config; never email-derived."""
+    if not rules_path.exists():
+        return {}
+    data = yaml.safe_load(rules_path.read_text()) or {}
+    meta: dict[str, dict[str, Any]] = {}
+    for tier in ("urgent", "notable"):
+        for entry in (data.get(tier) or []):
+            if isinstance(entry, dict) and entry.get("id"):
+                meta[entry["id"]] = {
+                    "description": str(entry.get("description", "")),
+                    "fix_hint": (str(entry["fix_hint"]) if entry.get("fix_hint") else None),
+                    "fixer": bool(entry.get("fixer", False)),
+                }
+    return meta
+
+
+def fixer_eligible_rule_ids(rule_meta: dict[str, dict[str, Any]]) -> set[str]:
+    return {rid for rid, m in rule_meta.items() if m.get("fixer")}
 
 
 def dispatch_cycle(*, findings_rows, ledger: DispatchLedger, fix_hints, secret,
