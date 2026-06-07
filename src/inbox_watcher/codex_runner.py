@@ -30,6 +30,7 @@ def run_codex(*, clone_dir: Path, prompt: str, timeout_sec: int,
         log.warning("codex timed out after %ss in %s", timeout_sec, clone_dir)
         return CodexResult(False, "", f"codex timeout after {timeout_sec}s")
     except Exception as exc:
+        log.warning("codex failed: %s", exc)
         return CodexResult(False, "", f"codex error: {exc}")
     ok = proc.returncode == 0
     return CodexResult(ok, proc.stdout or "", proc.stderr or "")

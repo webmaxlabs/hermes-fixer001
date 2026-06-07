@@ -31,3 +31,11 @@ def test_run_codex_nonzero_is_not_ok():
     res = run_codex(clone_dir=Path("/tmp/x"), prompt="p", timeout_sec=1,
                     codex_bin="codex", runner=lambda c, **k: P())
     assert res.ok is False and res.stderr == "boom"
+
+
+def test_run_codex_os_error_is_not_ok():
+    def boom(cmd, **kw): raise FileNotFoundError("codex not found")
+    res = run_codex(clone_dir=Path("/tmp/x"), prompt="p", timeout_sec=1,
+                    codex_bin="/bad/path/codex", runner=boom)
+    assert res.ok is False
+    assert "codex error" in res.stderr
