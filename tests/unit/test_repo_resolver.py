@@ -131,7 +131,6 @@ def _shipped_map():
 FLEET_SUBJECTS = {
     "[URGENT] vercel-log-watcher: agent-intel-kit-q2r2 — haiku:[fire-brief-job].*401": "agent-intel-kit",
     "[URGENT] vercel-log-watcher: uncensored-chatbot — haiku:[auth][error].*InvalidCheck": "nexus-uncensored",
-    "[URGENT] vercel-log-watcher: apex-athletes — haiku:compliance.*duplicate key": "apex-athletes",
 }
 
 
@@ -154,5 +153,12 @@ def test_webmax_injection_cannot_introduce_new_repo():
     ) is None
 
 
-def test_apex_athletes_is_allowlisted():
-    assert "apex-athletes" in ALLOWLIST
+def test_apex_athletes_dropped_from_fixer():
+    # apex moved to its own infra (2026-06-07): no longer allowlisted, and its fleet
+    # subject no longer resolves to a repo, so it can never be dispatched to the fixer.
+    assert "apex-athletes" not in ALLOWLIST
+    assert resolve_repo(
+        "webmax",
+        "[URGENT] vercel-log-watcher: apex-athletes — haiku:compliance.*duplicate key",
+        _shipped_map(),
+    ) is None

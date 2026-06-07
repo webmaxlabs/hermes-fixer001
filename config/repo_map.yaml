@@ -25,9 +25,10 @@ mappings:
   - vendor: webmax
     project: uncensored-chatbot       # fleet's project name for nexus-uncensored
     repo: nexus-uncensored
-  - vendor: webmax
-    project: apex-athletes
-    repo: apex-athletes
+  # NOTE: apex-athletes was dropped 2026-06-07 — apex moved to its own infra
+  # (own Vercel/Supabase/Resend/GitHub, no longer under webmaxlabs). Its alerts still
+  # reach alerts@webmaxlabs.com so they classify + show in the digest, but with no
+  # mapping here they resolve repo=None => digest-only, never dispatched to the fixer.
   # --- nexus-uncensored ---
   - vendor: vercel
     project: nexus-uncensored        # VERIFY: real Vercel project slug

@@ -19,7 +19,9 @@ log = logging.getLogger("inbox_watcher.repo_resolver")
 # The only repos the fixer may ever target. A mapping resolving outside this set is dropped.
 ALLOWLIST = frozenset({
     "nexus-uncensored", "agent-intel-kit", "secret-agent-vm", "boe-generator",
-    "apex-athletes",
+    # apex-athletes dropped 2026-06-07 — apex moved to its own infra (own
+    # Vercel/Supabase/Resend/GitHub, no longer under webmaxlabs), so it is no longer
+    # a valid fixer target. Its alerts still arrive but now resolve repo=None.
 })
 
 
