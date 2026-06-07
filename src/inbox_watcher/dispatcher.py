@@ -135,7 +135,7 @@ def dispatch_cycle(*, findings_rows, ledger: DispatchLedger, fix_hints, secret,
             except Exception as exc:                                # per-finding isolation
                 log.warning("fixer_run crashed for %s: %s", sig[:12], exc)
                 counts["errors"] += 1
-                open_sigs.add(sig)   # in_progress was recorded by fixer; don't retry this cycle
+                open_sigs.add(sig)   # suppress within-cycle retry; cross-run retry still governed by the ledger
                 continue
             if status == "skipped_locked":
                 counts["skipped"] += 1

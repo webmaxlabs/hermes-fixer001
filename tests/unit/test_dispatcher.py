@@ -13,6 +13,10 @@ FINDING = {
 }
 
 
+def _row(repo="agent-intel-kit", rule="fleet_db_integrity", pri="P1"):
+    return {"priority": pri, "repo": repo, "rule_id": rule, "summary": "s", "message_id": "<m>"}
+
+
 def test_error_signature_stable_and_specific():
     a = error_signature("nexus-uncensored", "vercel_deploy_failed")
     b = error_signature("nexus-uncensored", "vercel_deploy_failed")
@@ -142,10 +146,6 @@ def test_valid_modes():
     assert VALID_MODES == frozenset({"dry_run", "live"})
 
 
-def _row(repo="agent-intel-kit", rule="fleet_db_integrity", pri="P1"):
-    return {"priority": pri, "repo": repo, "rule_id": rule, "summary": "s", "message_id": "<m>"}
-
-
 def test_live_calls_fixer_only_for_eligible(tmp_path):
     from inbox_watcher.dispatcher import dispatch_cycle
     from inbox_watcher.ledger import DispatchLedger
@@ -169,7 +169,9 @@ def test_live_per_finding_isolation(tmp_path):
     res = dispatch_cycle(findings_rows=[_row()], ledger=led, fix_hints={}, secret="s",
                          mode="live", emit=lambda e: None, now="t0",
                          fixer_run=boom, fixer_eligible={"fleet_db_integrity"})
-    assert res["errors"] == 1   # isolated, did not raise
+    assert res["errors"] == 1
+    assert res["dispatched"] == 0
+    assert res["considered"] == 1
 
 
 def test_main_fails_closed_without_secret(tmp_path, monkeypatch):
