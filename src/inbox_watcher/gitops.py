@@ -9,7 +9,7 @@ def repo_url(owner: str, repo: str) -> str:
     return f"https://github.com/{owner}/{repo}.git"
 
 
-def _git(args: list[str], *, runner: Callable, cwd: str | None = None):
+def _git(args: list[str], *, runner: Callable, cwd: str | None = None) -> subprocess.CompletedProcess:
     proc = runner(["git", *args] if cwd is None else ["git", "-C", cwd, *args],
                   capture_output=True, text=True)
     if proc.returncode != 0:

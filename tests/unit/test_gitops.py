@@ -44,3 +44,8 @@ def test_commit_branch_push_sequence():
     assert any(j.startswith("git -C") and "add -A" in j for j in joined) or any("add -A" in j for j in joined)
     assert any("commit" in j for j in joined)
     assert any("push" in j for j in joined)
+    assert any("user.name=hermes-fixer" in j for j in joined)
+    assert any("user.email=alerts@webmaxlabs.com" in j for j in joined)
+    order = [next(i for i, j in enumerate(joined) if op in j)
+             for op in ("checkout -b", "add -A", "commit", "push")]
+    assert order == sorted(order)
