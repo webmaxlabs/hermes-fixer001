@@ -22,6 +22,13 @@ class Config:
     dispatch_mode: str
     repo_map_path: Path
     dispatch_ledger_path: Path
+    codex_bin: str
+    codex_timeout_sec: int
+    github_token: str
+    fixer_pr_labels: list[str]
+    fixer_default_owner: str
+    fixer_workdir: Path
+    fixer_lock_path: Path
 
     @classmethod
     def load(cls, env_file: Path | None = None) -> "Config":
@@ -39,6 +46,8 @@ class Config:
         findings_dir = Path(os.environ.get(
             "INBOX_WATCHER_FINDINGS_DIR", str(REPO_ROOT / "findings")))
 
+        labels = [s.strip() for s in os.environ.get("FIXER_PR_LABELS", "hermes-fixer").split(",") if s.strip()]
+
         return cls(
             agentmail_api_key=req("AGENTMAIL_API_KEY"),
             inbox_id=os.environ.get("AGENTMAIL_INBOX_ID", "fixer001@agentmail.to").strip(),
@@ -53,4 +62,11 @@ class Config:
             dispatch_mode=os.environ.get("DISPATCH_MODE", "dry_run").strip() or "dry_run",
             repo_map_path=REPO_ROOT / "config" / "repo_map.yaml",
             dispatch_ledger_path=findings_dir / "dispatched.jsonl",
+            codex_bin=os.environ.get("CODEX_BIN", "codex").strip() or "codex",
+            codex_timeout_sec=int(os.environ.get("CODEX_TIMEOUT_SEC", "600")),
+            github_token=os.environ.get("GITHUB_TOKEN", "").strip(),
+            fixer_pr_labels=labels or ["hermes-fixer"],
+            fixer_default_owner=os.environ.get("FIXER_DEFAULT_OWNER", "webmaxlabs").strip() or "webmaxlabs",
+            fixer_workdir=Path(os.environ.get("FIXER_WORKDIR", str(Path.home() / "inbox-watcher" / "fixer-work"))),
+            fixer_lock_path=Path(os.environ.get("FIXER_LOCK_PATH", str(Path.home() / "inbox-watcher" / "fixer.lock"))),
         )

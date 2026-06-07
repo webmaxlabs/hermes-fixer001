@@ -42,3 +42,25 @@ def test_open_signatures_excludes_closed(tmp_path):
                  "priority": "P1", "first_dispatched_ts": "t0", "last_seen_ts": "t2",
                  "seen_count": 1, "mode": "dry_run", "open": False})
     assert led.open_signatures() == set()
+
+
+def test_record_status_pr_url_and_close(tmp_path):
+    p = tmp_path / "d.jsonl"
+    led = DispatchLedger(p)
+    led.record(error_signature="sig1", repo="r", rule_id="x", priority="P1",
+               mode="live", now="t0", status="in_progress")
+    assert led.open_signatures() == {"sig1"}
+    led.record(error_signature="sig1", repo="r", rule_id="x", priority="P1",
+               mode="live", now="t1", status="opened", pr_url="https://pr/1")
+    folded = led.fold()["sig1"]
+    assert folded["status"] == "opened" and folded["pr_url"] == "https://pr/1"
+    assert folded["open"] is True
+    led.record(error_signature="sig1", repo="r", rule_id="x", priority="P1",
+               mode="live", now="t1b")  # skip-path touch, no status
+    assert led.fold()["sig1"]["status"] == "opened"   # carried forward, not reset
+    assert led.fold()["sig1"]["pr_url"] == "https://pr/1"
+    led.record(error_signature="sig1", repo="r", rule_id="x", priority="P1",
+               mode="live", now="t2", status="closed", open=False)
+    assert led.open_signatures() == set()
+    closed = led.fold()["sig1"]
+    assert closed["status"] == "closed" and closed["pr_url"] == "https://pr/1"

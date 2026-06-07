@@ -33,3 +33,17 @@ Cron (America/Phoenix MST), offset from the `*/10` ingest tick:
     5-59/10 * * * * /home/<user>/services/inbox-watcher/dispatch.sh >> /home/<user>/inbox-watcher/dispatch.log 2>&1
 
 Requires `HERMES_FIXER_DISPATCH_SECRET` in `~/.config/inbox-watcher/.env` (chmod 600).
+
+## Phase B: agent001-hosted Codex fixer
+
+When `DISPATCH_MODE=live`, a fixer-eligible finding (P1/P2 + mapped repo + the rule
+has `fixer: true`) triggers Codex on a fresh clone and opens a **draft** PR
+(`hermes-fixer/<sig>`), labelled `hermes-fixer` + priority. Never merges. Runs
+in-process, lockfile-guarded (`fixer.lock`), record-before-emit (a crash leaves the
+signature open: no auto-retry, never a double PR). The Codex prompt is built only
+from the rule's description + fix_hint + repo — no email text.
+
+`python -m inbox_watcher.dispatcher --reconcile` closes ledger signatures whose PR
+merged/closed, re-enabling dispatch on recurrence (cron daily).
+
+Eligibility is opt-in: add `fixer: true` to a rule in `config/rules.yaml`.
