@@ -48,6 +48,8 @@ def test_run_codex_builds_command_and_reports_ok():
     assert "fix it" in calls["cmd"]
     assert calls["kw"]["timeout"] == 300
     assert calls["kw"]["cwd"] == "/tmp/x"
+    import subprocess
+    assert calls["kw"]["stdin"] is subprocess.DEVNULL  # else codex blocks on inherited stdin
 
 
 def test_run_codex_timeout_is_not_ok():

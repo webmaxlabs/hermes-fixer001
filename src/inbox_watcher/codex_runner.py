@@ -25,7 +25,10 @@ def run_codex(*, clone_dir: Path, prompt: str, timeout_sec: int,
     cmd = [codex_bin, "exec", "--sandbox", "workspace-write",
            "--skip-git-repo-check", prompt]
     try:
-        proc = runner(cmd, cwd=str(clone_dir), capture_output=True, text=True, timeout=timeout_sec)
+        # stdin=DEVNULL is load-bearing: `codex exec` reads additional input from stdin,
+        # so an inherited open stdin (cron/ssh/systemd) makes it block until timeout.
+        proc = runner(cmd, cwd=str(clone_dir), capture_output=True, text=True,
+                      timeout=timeout_sec, stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         log.warning("codex timed out after %ss in %s", timeout_sec, clone_dir)
         return CodexResult(False, "", f"codex timeout after {timeout_sec}s")
@@ -45,7 +48,7 @@ def codex_logged_in(codex_bin: str = "codex", *, runner: Callable = subprocess.r
     """
     try:
         proc = runner([codex_bin, "login", "status"],
-                      capture_output=True, text=True, timeout=30)
+                      capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
     except Exception as exc:
         log.warning("codex login status check failed: %s", exc)
         return False
