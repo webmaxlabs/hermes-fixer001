@@ -182,6 +182,13 @@ def main(argv=None) -> int:
             log.error("--reconcile requires GITHUB_TOKEN; refusing (fail-closed)")
             return 2
         return _reconcile(cfg)
+    if cfg.dispatch_mode == "live":
+        from inbox_watcher import codex_runner
+        if not codex_runner.codex_logged_in(cfg.codex_bin):
+            log.error("DISPATCH_MODE=live but Codex is not logged in (%s login status); refusing "
+                      "to dispatch so findings retry next cycle instead of burning (fail-closed)",
+                      cfg.codex_bin)
+            return 2
     run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     rows = InboxFindingsWriter.read_day(cfg.findings_dir, run_date)
     ledger = DispatchLedger(cfg.dispatch_ledger_path)

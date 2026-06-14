@@ -198,6 +198,41 @@ def test_main_live_without_token_fails_closed(tmp_path, monkeypatch):
     assert D.main() == 2   # live requires GITHUB_TOKEN (fail-closed); _FakeCfg has github_token=""
 
 
+def test_main_live_without_codex_auth_fails_closed(tmp_path, monkeypatch):
+    # live + token present, but Codex is not logged in -> refuse so the finding is
+    # retried next cycle instead of being recorded open then burned on a failed exec.
+    import inbox_watcher.dispatcher as D
+    import inbox_watcher.codex_runner as CR
+    from inbox_watcher.config import Config
+    cfg = _FakeCfg(tmp_path, mode="live"); cfg.github_token = "ghtoken"
+    monkeypatch.setattr(Config, "load", staticmethod(lambda **kw: cfg))
+    monkeypatch.setattr(CR, "codex_logged_in", lambda *a, **k: False)
+    assert D.main() == 2
+
+
+def test_main_dry_run_skips_codex_preflight(tmp_path, monkeypatch):
+    # dry_run never calls Codex, so a not-logged-in Codex must NOT block it.
+    import inbox_watcher.dispatcher as D
+    import inbox_watcher.codex_runner as CR
+    from inbox_watcher.config import Config
+    monkeypatch.setattr(Config, "load", staticmethod(lambda **kw: _FakeCfg(tmp_path, mode="dry_run")))
+    called = {"n": 0}
+    monkeypatch.setattr(CR, "codex_logged_in", lambda *a, **k: called.__setitem__("n", called["n"] + 1) or False)
+    assert D.main() == 0
+    assert called["n"] == 0  # preflight not consulted in dry_run
+
+
+def test_main_reconcile_not_blocked_by_codex(tmp_path, monkeypatch):
+    # reconcile only reads PR state; a down Codex must not stop it from closing PRs.
+    import inbox_watcher.dispatcher as D
+    import inbox_watcher.codex_runner as CR
+    from inbox_watcher.config import Config
+    cfg = _FakeCfg(tmp_path, mode="live"); cfg.github_token = "ghtoken"
+    monkeypatch.setattr(Config, "load", staticmethod(lambda **kw: cfg))
+    monkeypatch.setattr(CR, "codex_logged_in", lambda *a, **k: False)
+    assert D.main(["--reconcile"]) == 0   # empty ledger -> closed=0, not blocked by codex
+
+
 def test_main_fails_closed_without_secret(tmp_path, monkeypatch):
     # CORRECTED: capture the original classmethod and delegate to a tmp env file,
     # rather than the plan's recursive lambda (which infinite-loops).

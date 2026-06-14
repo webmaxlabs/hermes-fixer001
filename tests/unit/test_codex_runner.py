@@ -1,5 +1,38 @@
 from pathlib import Path
-from inbox_watcher.codex_runner import run_codex, CodexResult
+from inbox_watcher.codex_runner import run_codex, CodexResult, codex_logged_in
+
+
+class _P:
+    def __init__(self, returncode=0, stdout="", stderr=""):
+        self.returncode = returncode; self.stdout = stdout; self.stderr = stderr
+
+
+def test_codex_logged_in_true_on_exit0_and_authed_text():
+    runner = lambda cmd, **kw: _P(0, "Logged in using ChatGPT\n")
+    assert codex_logged_in("codex", runner=runner) is True
+
+
+def test_codex_logged_in_false_on_nonzero():
+    runner = lambda cmd, **kw: _P(1, "", "Not logged in")
+    assert codex_logged_in("codex", runner=runner) is False
+
+
+def test_codex_logged_in_false_when_exit0_but_text_says_not_logged_in():
+    # defensive: trust the words over the exit code if they disagree
+    runner = lambda cmd, **kw: _P(0, "Not logged in\n")
+    assert codex_logged_in("codex", runner=runner) is False
+
+
+def test_codex_logged_in_false_when_binary_missing():
+    def boom(cmd, **kw): raise FileNotFoundError("codex not found")
+    assert codex_logged_in("/bad/codex", runner=boom) is False
+
+
+def test_codex_logged_in_invokes_login_status():
+    seen = {}
+    def runner(cmd, **kw): seen["cmd"] = cmd; return _P(0, "Logged in using ChatGPT")
+    codex_logged_in("mycodex", runner=runner)
+    assert seen["cmd"] == ["mycodex", "login", "status"]
 
 
 def test_run_codex_builds_command_and_reports_ok():
