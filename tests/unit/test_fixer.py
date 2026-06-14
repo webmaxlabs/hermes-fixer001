@@ -10,9 +10,9 @@ def _payload():
             "fix_hint": "idempotent", "message_id": "<m>"}
 
 
-def _deps(tmp_path, *, changes: bool, codex_ok: bool = True):
+def _deps(tmp_path, *, changes: bool, codex_ok: bool = True, existing_pr=None):
     led = DispatchLedger(tmp_path / "d.jsonl")
-    rec = {"clone": [], "codex_prompts": [], "push": [], "pr": []}
+    rec = {"clone": [], "codex_prompts": [], "push": [], "pr": [], "find_open_pr": []}
     def clone(url, dest, **kw): rec["clone"].append((url, str(dest))); Path(dest).mkdir(parents=True, exist_ok=True)
     def run_codex(*, clone_dir, prompt, **kw):
         rec["codex_prompts"].append(prompt)
@@ -21,9 +21,11 @@ def _deps(tmp_path, *, changes: bool, codex_ok: bool = True):
     def has_changes(d, **kw): return changes
     def commit_branch_push(d, *, branch, message, **kw): rec["push"].append(branch)
     def open_draft_pr(**kw): rec["pr"].append(kw); return "https://github.com/webmaxlabs/agent-intel-kit/pull/1"
+    def find_open_pr(**kw): rec["find_open_pr"].append(kw); return existing_pr
     deps = FixerDeps(
         clone=clone, run_codex=run_codex, has_changes=has_changes,
-        commit_branch_push=commit_branch_push, open_draft_pr=open_draft_pr, ledger=led,
+        commit_branch_push=commit_branch_push, open_draft_pr=open_draft_pr,
+        find_open_pr=find_open_pr, ledger=led,
         rule_meta={"fleet_db_integrity": {"description": "DB integrity", "fix_hint": "idempotent", "fixer": True}},
         workdir=tmp_path / "work", lock_path=tmp_path / "fixer.lock",
         owner="webmaxlabs", base="main", labels=["hermes-fixer"], token="tok",
@@ -38,6 +40,17 @@ def test_changes_open_draft_pr_and_record_opened(tmp_path):
     assert rec["push"] and rec["pr"]
     folded = led.fold()["sig1"]
     assert folded["status"] == "opened" and folded["pr_url"].endswith("/pull/1")
+
+
+def test_existing_pr_recovered_without_re_fixing(tmp_path):
+    # idempotency guard: a prior attempt already opened a PR -> recover it, never re-fix.
+    url = "https://github.com/webmaxlabs/agent-intel-kit/pull/7"
+    deps, rec, led = _deps(tmp_path, changes=True, existing_pr=url)
+    status = run_fixer(_payload(), deps=deps, now="t0")
+    assert status == "opened"
+    assert rec["clone"] == [] and rec["codex_prompts"] == [] and rec["pr"] == []  # no second PR
+    folded = led.fold()["sig1"]
+    assert folded["status"] == "opened" and folded["pr_url"] == url
 
 
 def test_no_changes_records_no_fix_and_opens_no_pr(tmp_path):

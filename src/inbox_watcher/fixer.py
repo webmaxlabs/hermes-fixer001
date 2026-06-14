@@ -23,6 +23,7 @@ class FixerDeps:
     has_changes: Callable
     commit_branch_push: Callable
     open_draft_pr: Callable
+    find_open_pr: Callable
     ledger: DispatchLedger
     rule_meta: dict[str, dict[str, Any]]
     workdir: Path
@@ -64,6 +65,16 @@ def _run_locked(payload: dict[str, Any], *, deps: FixerDeps, now: str) -> str:
                            priority=priority, mode="live", now=now,
                            status=status, pr_url=pr_url)
 
+    branch = f"hermes-fixer/{sig[:12]}"
+    # Idempotency guard: if a prior (possibly crashed) attempt already opened a PR for
+    # this error, recover it instead of opening a second one. Raises on API error => the
+    # caller defers the fix (no in_progress recorded), so a GitHub blip never double-PRs.
+    existing_pr = deps.find_open_pr(owner=deps.owner, repo=repo, head=branch, token=deps.token)
+    if existing_pr:
+        log.info("existing PR for %s/%s; recovering instead of re-fixing: %s", repo, sig[:12], existing_pr)
+        _record("opened", pr_url=existing_pr)
+        return "opened"
+
     # record-before-emit: mark open BEFORE any irreversible action
     _record("in_progress")
 
@@ -83,7 +94,6 @@ def _run_locked(payload: dict[str, Any], *, deps: FixerDeps, now: str) -> str:
         if not deps.has_changes(clone_dir):
             _record("no_fix")
             return "no_fix"
-        branch = f"hermes-fixer/{sig[:12]}"
         deps.commit_branch_push(clone_dir, branch=branch,
                                 message=f"hermes-fixer: {meta.get('description', rule_id)}")
         title = f"hermes-fixer: {meta.get('description', rule_id)} ({repo})"

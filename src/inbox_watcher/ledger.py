@@ -51,7 +51,8 @@ class DispatchLedger:
     def record(self, *, error_signature: str, repo: str, rule_id: str,
                priority: str, mode: str, now: str,
                status: str | None = None, pr_url: str | None = None,
-               open: bool | None = None) -> None:  # `open` matches the ledger field; body never calls builtins.open()
+               open: bool | None = None,
+               fix_attempts: int | None = None) -> None:  # `open` matches the ledger field; body never calls builtins.open()
         # `seen_count` counts how many times this signature was ENCOUNTERED across cycles
         # (dispatch_cycle calls record() on the skip path too, to touch last_seen_ts), NOT
         # how many times it was dispatched. A signature dispatches once while open, so after
@@ -64,14 +65,16 @@ class DispatchLedger:
             is_open = (existing.get("open", True) if open is None else open)
             pr = existing.get("pr_url") if pr_url is None else pr_url
             st = (existing.get("status", "dispatched") if status is None else status)
+            fa = int(existing.get("fix_attempts", 0)) if fix_attempts is None else fix_attempts
         else:
             first_ts, seen = now, 1
             is_open = True if open is None else open
             pr = pr_url
             st = "dispatched" if status is None else status
+            fa = 0 if fix_attempts is None else fix_attempts
         self._append({
             "error_signature": error_signature, "repo": repo, "rule_id": rule_id,
             "priority": priority, "first_dispatched_ts": first_ts, "last_seen_ts": now,
             "seen_count": seen, "mode": mode, "status": st, "pr_url": pr,
-            "open": is_open,
+            "open": is_open, "fix_attempts": fa,
         })

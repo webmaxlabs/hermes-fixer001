@@ -1,12 +1,31 @@
 import pytest
 
-from inbox_watcher.github_pr import open_draft_pr, get_pr_state, _parse
+from inbox_watcher.github_pr import open_draft_pr, get_pr_state, _parse, find_open_pr_for_head
 
 
 class Resp:
     def __init__(self, code, payload, text=""):
         self.status_code = code; self._p = payload; self.text = text
     def json(self): return self._p
+
+
+def test_find_open_pr_for_head_returns_url_when_present():
+    def http(method, url, **kw):
+        assert kw["params"] == {"head": "webmaxlabs:hermes-fixer/x", "state": "open"}
+        return Resp(200, [{"html_url": "https://github.com/webmaxlabs/r/pull/3"}])
+    assert find_open_pr_for_head(owner="webmaxlabs", repo="r", head="hermes-fixer/x",
+                                 token="tok", http=http) == "https://github.com/webmaxlabs/r/pull/3"
+
+
+def test_find_open_pr_for_head_returns_none_when_empty():
+    assert find_open_pr_for_head(owner="webmaxlabs", repo="r", head="hermes-fixer/x",
+                                 token="tok", http=lambda *a, **k: Resp(200, [])) is None
+
+
+def test_find_open_pr_for_head_raises_on_error():
+    with pytest.raises(RuntimeError):
+        find_open_pr_for_head(owner="webmaxlabs", repo="r", head="hermes-fixer/x",
+                              token="tok", http=lambda *a, **k: Resp(500, {}, "boom"))
 
 
 def test_open_draft_pr_posts_and_labels():

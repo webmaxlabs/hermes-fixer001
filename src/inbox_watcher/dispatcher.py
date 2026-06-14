@@ -25,6 +25,12 @@ log = logging.getLogger("inbox_watcher.dispatcher")
 ACTIONABLE_PRIORITIES = frozenset({"P1", "P2"})
 VALID_MODES = frozenset({"dry_run", "live"})
 
+# A fix is recoverable once its in_progress row is older than this (well past the
+# codex timeout + clone/push, so we never disturb an in-flight fix), capped to avoid
+# burning quota retrying a persistently-failing repo forever.
+STALE_FIX_SECONDS = 1800
+MAX_FIX_ATTEMPTS = 3
+
 PAYLOAD_KEYS = (
     "schema_version", "repo", "rule_id", "priority", "error_signature",
     "summary", "fix_hint", "message_id", "dispatched_at",
@@ -147,6 +153,45 @@ def dispatch_cycle(*, findings_rows, ledger: DispatchLedger, fix_hints, secret,
     return counts
 
 
+def recover_stale_fixes(ledger: DispatchLedger, *, now: str,
+                        stale_seconds: int = STALE_FIX_SECONDS,
+                        max_attempts: int = MAX_FIX_ATTEMPTS) -> dict[str, int]:
+    """Re-enable or retire fixes stuck in `in_progress`.
+
+    A codex timeout/crash leaves a row in_progress+open (no PR), which the dedup gate
+    would skip forever. The fixer is synchronous + lockfile-guarded, so any in_progress
+    row older than stale_seconds is a dead attempt, never an in-flight one. We flip it
+    back to dispatchable (open=False) up to max_attempts, then mark it `failed` (loudly)
+    so a human is alerted. Double-PR safety lives in run_fixer's find_open_pr guard.
+    """
+    now_dt = datetime.fromisoformat(now)
+    counts = {"retried": 0, "exhausted": 0}
+    for sig, row in ledger.fold().items():
+        if not (row.get("open") and row.get("status") == "in_progress"):
+            continue
+        stamp = row.get("last_seen_ts") or row.get("first_dispatched_ts")
+        if stamp:
+            try:
+                if (now_dt - datetime.fromisoformat(stamp)).total_seconds() < stale_seconds:
+                    continue  # may still be running
+            except ValueError:
+                pass
+        attempts = int(row.get("fix_attempts", 0))
+        common = dict(error_signature=sig, repo=row["repo"], rule_id=row["rule_id"],
+                      priority=row["priority"], mode="live", now=now)
+        if attempts >= max_attempts:
+            ledger.record(**common, status="failed", open=True, fix_attempts=attempts)
+            log.error("fixer GAVE UP on %s (%s) after %d attempts stuck in_progress; needs a human",
+                      row["repo"], sig[:12], attempts)
+            counts["exhausted"] += 1
+        else:
+            ledger.record(**common, status="retry_pending", open=False, fix_attempts=attempts + 1)
+            log.info("re-enabling stale fix %s (%s) for retry (attempt %d/%d)",
+                     row["repo"], sig[:12], attempts + 1, max_attempts)
+            counts["retried"] += 1
+    return counts
+
+
 def _build_fixer_run(cfg, rule_meta):
     from inbox_watcher.fixer import run_fixer, FixerDeps
     from inbox_watcher import gitops, codex_runner, github_pr
@@ -155,6 +200,7 @@ def _build_fixer_run(cfg, rule_meta):
     deps = FixerDeps(
         clone=gitops.clone, run_codex=codex_runner.run_codex, has_changes=gitops.has_changes,
         commit_branch_push=gitops.commit_branch_push, open_draft_pr=github_pr.open_draft_pr,
+        find_open_pr=github_pr.find_open_pr_for_head,
         ledger=ledger, rule_meta=rule_meta, workdir=cfg.fixer_workdir, lock_path=cfg.fixer_lock_path,
         owner=cfg.fixer_default_owner, base="main", labels=cfg.fixer_pr_labels,
         token=cfg.github_token, codex_bin=cfg.codex_bin, timeout_sec=cfg.codex_timeout_sec)
@@ -195,6 +241,11 @@ def main(argv=None) -> int:
     rule_meta = load_rule_meta(cfg.rules_path)
     fix_hints = {rid: m["fix_hint"] for rid, m in rule_meta.items() if m.get("fix_hint")}
     now = datetime.now(timezone.utc).isoformat()
+
+    if cfg.dispatch_mode == "live":
+        rec = recover_stale_fixes(ledger, now=now)
+        if rec["retried"] or rec["exhausted"]:
+            log.info("stale-fix recovery: %s", rec)
 
     def emit(envelope):
         log.info("DRY-RUN dispatch envelope: %s", json.dumps(envelope, separators=(",", ":")))

@@ -22,9 +22,11 @@ def test_full_live_emit_opens_pr_with_stub_codex(tmp_path):
     def has_changes(d, **kw): return True
     def commit_branch_push(d, *, branch, message, **kw): pass
     def open_draft_pr(**kw): pr_calls.append(kw); return "https://github.com/webmaxlabs/agent-intel-kit/pull/9"
+    def find_open_pr(**kw): return None
 
     deps = FixerDeps(clone=clone, run_codex=run_codex, has_changes=has_changes,
                      commit_branch_push=commit_branch_push, open_draft_pr=open_draft_pr,
+                     find_open_pr=find_open_pr,
                      ledger=led, rule_meta=meta, workdir=tmp_path / "w", lock_path=tmp_path / "l",
                      owner="webmaxlabs", base="main", labels=["hermes-fixer"], token="tok",
                      codex_bin="codex", timeout_sec=60)

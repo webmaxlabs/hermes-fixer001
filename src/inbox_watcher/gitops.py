@@ -31,6 +31,10 @@ def commit_branch_push(repo_dir: Path, *, branch: str, message: str,
     d = str(repo_dir)
     _git(["checkout", "-b", branch], runner=runner, cwd=d)
     _git(["add", "-A"], runner=runner, cwd=d)
-    _git(["-c", "user.name=hermes-fixer", "-c", "user.email=alerts@webmaxlabs.com",
+    # email must map to the webmaxlabs GitHub account or Vercel's deployment protection
+    # blocks the PR's deploy ("commit email could not be matched to a GitHub account").
+    _git(["-c", "user.name=hermes-fixer", "-c", "user.email=github@webmaxlabs.com",
           "commit", "-m", message], runner=runner, cwd=d)
-    _git(["push", "-u", "origin", branch], runner=runner, cwd=d)
+    # --force: the branch name is deterministic + fixer-owned (hermes-fixer/<sig>), so a
+    # retry legitimately overwrites a prior orphaned attempt (push ok, PR-create failed).
+    _git(["push", "-u", "--force", "origin", branch], runner=runner, cwd=d)

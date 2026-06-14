@@ -43,9 +43,10 @@ def test_commit_branch_push_sequence():
     assert any("checkout -b hermes-fixer/abc" in j for j in joined)
     assert any(j.startswith("git -C") and "add -A" in j for j in joined) or any("add -A" in j for j in joined)
     assert any("commit" in j for j in joined)
-    assert any("push" in j for j in joined)
+    assert any("push" in j and "--force" in j for j in joined)  # force: fixer-owned branch, retry-safe
     assert any("user.name=hermes-fixer" in j for j in joined)
-    assert any("user.email=alerts@webmaxlabs.com" in j for j in joined)
+    # email must map to a GitHub account or Vercel deployment protection blocks the PR's deploy
+    assert any("user.email=github@webmaxlabs.com" in j for j in joined)
     order = [next(i for i, j in enumerate(joined) if op in j)
              for op in ("checkout -b", "add -A", "commit", "push")]
     assert order == sorted(order)

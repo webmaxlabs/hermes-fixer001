@@ -174,6 +174,56 @@ def test_live_per_finding_isolation(tmp_path):
     assert res["considered"] == 1
 
 
+def _inprog(led, sig, *, ts, attempts=0):
+    led.record(error_signature=sig, repo="boe-generator", rule_id="fleet_db_integrity",
+               priority="P1", mode="live", now=ts, status="in_progress", fix_attempts=attempts)
+
+
+def test_recover_stale_inprogress_retries_under_cap(tmp_path):
+    from inbox_watcher.dispatcher import recover_stale_fixes
+    from inbox_watcher.ledger import DispatchLedger
+    led = DispatchLedger(tmp_path / "d.jsonl")
+    _inprog(led, "s1", ts="2026-06-14T00:00:00+00:00")  # 1h old
+    res = recover_stale_fixes(led, now="2026-06-14T01:00:00+00:00")
+    assert res == {"retried": 1, "exhausted": 0}
+    row = led.fold()["s1"]
+    assert row["open"] is False and row["status"] == "retry_pending" and row["fix_attempts"] == 1
+
+
+def test_recover_stale_inprogress_exhausts_at_cap(tmp_path):
+    from inbox_watcher.dispatcher import recover_stale_fixes, MAX_FIX_ATTEMPTS
+    from inbox_watcher.ledger import DispatchLedger
+    led = DispatchLedger(tmp_path / "d.jsonl")
+    _inprog(led, "s1", ts="2026-06-14T00:00:00+00:00", attempts=MAX_FIX_ATTEMPTS)
+    res = recover_stale_fixes(led, now="2026-06-14T01:00:00+00:00")
+    assert res == {"retried": 0, "exhausted": 1}
+    row = led.fold()["s1"]
+    assert row["open"] is True and row["status"] == "failed"  # stays deduped, logged loudly
+
+
+def test_recover_leaves_fresh_inprogress_alone(tmp_path):
+    # a fix that may still be running (recent) must not be disturbed
+    from inbox_watcher.dispatcher import recover_stale_fixes
+    from inbox_watcher.ledger import DispatchLedger
+    led = DispatchLedger(tmp_path / "d.jsonl")
+    _inprog(led, "s1", ts="2026-06-14T00:59:00+00:00")  # 1 min old
+    res = recover_stale_fixes(led, now="2026-06-14T01:00:00+00:00")
+    assert res == {"retried": 0, "exhausted": 0}
+    assert led.fold()["s1"]["status"] == "in_progress"
+
+
+def test_recover_ignores_non_inprogress_rows(tmp_path):
+    from inbox_watcher.dispatcher import recover_stale_fixes
+    from inbox_watcher.ledger import DispatchLedger
+    led = DispatchLedger(tmp_path / "d.jsonl")
+    led.record(error_signature="s1", repo="boe-generator", rule_id="fleet_db_integrity",
+               priority="P1", mode="live", now="2026-06-14T00:00:00+00:00",
+               status="opened", pr_url="https://x/pull/1")
+    res = recover_stale_fixes(led, now="2026-06-14T01:00:00+00:00")
+    assert res == {"retried": 0, "exhausted": 0}
+    assert led.fold()["s1"]["status"] == "opened"
+
+
 class _FakeCfg:
     def __init__(self, tmp_path, mode="dry_run"):
         self.dispatch_secret = "s"; self.dispatch_mode = mode

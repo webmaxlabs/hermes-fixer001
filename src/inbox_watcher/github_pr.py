@@ -24,6 +24,24 @@ def _err_body(resp) -> str:
         return resp.text
 
 
+def find_open_pr_for_head(*, owner: str, repo: str, head: str, token: str,
+                          http: Callable = _default_http) -> str | None:
+    """Return the html_url of an OPEN PR whose head branch is `head`, else None.
+
+    Idempotency guard for the fixer: if a prior run already opened a PR for this
+    error (e.g. it crashed after open_draft_pr but before recording), the retry
+    must recover that PR instead of opening a second one. Raises on a non-2xx so
+    the caller fails closed (defers the fix) rather than risk a duplicate PR.
+    """
+    resp = http("GET", f"{_API}/repos/{owner}/{repo}/pulls",
+                headers=_headers(token), timeout=30,
+                params={"head": f"{owner}:{head}", "state": "open"})
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"PR lookup failed {resp.status_code}: {_err_body(resp)}")
+    data = resp.json()
+    return data[0]["html_url"] if data else None
+
+
 def open_draft_pr(*, owner: str, repo: str, head: str, base: str, title: str, body: str,
                   labels: list[str], token: str, http: Callable = _default_http) -> str:
     resp = http("POST", f"{_API}/repos/{owner}/{repo}/pulls",
