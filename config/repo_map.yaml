@@ -26,11 +26,28 @@ mappings:
     project: agent-intel-kit-q2r2     # Vercel project slug for agent-intel-kit
     repo: agent-intel-kit
   - vendor: webmax
-    project: uncensored-chatbot       # fleet's project name for nexus-uncensored
-    repo: nexus-uncensored
+    project: agent-intel-kit          # bare slug also emitted by vercel-log-watcher → same repo
+    repo: agent-intel-kit
+  - vendor: webmax
+    project: uncensored-chatbot       # "nexus-uncensored" is the internal codename
+    repo: uncensored-chatbot          # GitHub repo (verified webmaxlabs/uncensored-chatbot, 2026-06-13)
   - vendor: webmax
     project: boe-generator       # Vercel project slug == repo name
     repo: boe-generator
+  # --- added 2026-06-13 (Jake expanded fixer scope; slugs verified against
+  # vercel-log-watcher's emitted project names + GitHub repo existence) ---
+  - vendor: webmax
+    project: webmax-realtors          # Vercel slug == repo name
+    repo: webmax-realtors
+  - vendor: webmax
+    project: grantsfast-www-app-v1    # Vercel slug == repo name (uptime-watcher calls it "grantsfast")
+    repo: grantsfast-www-app-v1
+  - vendor: webmax
+    project: secret-agent-v1          # Secret Agent Voicemail (app.secretagentvoicemail.ai)
+    repo: secret-agent-v1
+  - vendor: webmax
+    project: secret-agent-vm          # second live Vercel project slug for the same app → same repo
+    repo: secret-agent-v1
   # NOTE: apex-athletes was dropped 2026-06-07 — apex moved to its own infra
   # (own Vercel/Supabase/Resend/GitHub, no longer under webmaxlabs). Its alerts still
   # reach alerts@webmaxlabs.com so they classify + show in the digest, but with no

@@ -18,9 +18,11 @@ log = logging.getLogger("inbox_watcher.repo_resolver")
 
 # The only repos the fixer may ever target. A mapping resolving outside this set is dropped.
 ALLOWLIST = frozenset({
-    "nexus-uncensored", "agent-intel-kit", "boe-generator",
-    # secret-agent-vm dropped — no prod domain, not a revenue app, so not a fixer
-    # target per the self-healing program principle (act only on revenue apps).
+    "uncensored-chatbot", "agent-intel-kit", "boe-generator",
+    # added 2026-06-13 (Jake expanded fixer scope to these revenue apps):
+    "webmax-realtors", "grantsfast-www-app-v1", "secret-agent-v1",
+    # "uncensored-chatbot" is the real GitHub repo; "nexus-uncensored" was an internal
+    # codename that does not exist as a repo (fixed 2026-06-13, was crashing ingest).
     # apex-athletes dropped 2026-06-07 — apex moved to its own infra (own
     # Vercel/Supabase/Resend/GitHub, no longer under webmaxlabs), so it is no longer
     # a valid fixer target. Its alerts still arrive but now resolve repo=None.

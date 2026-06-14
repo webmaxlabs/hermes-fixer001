@@ -11,7 +11,7 @@ extractors:
 mappings:
   - vendor: vercel
     project: nexus-prod
-    repo: nexus-uncensored
+    repo: uncensored-chatbot
   - vendor: github
     project: boe-generator
     repo: boe-generator
@@ -26,7 +26,7 @@ def repo_map(tmp_path):
 
 
 def test_resolves_mapped_project(repo_map):
-    assert resolve_repo("vercel", "Project: nexus-prod failed to deploy", repo_map) == "nexus-uncensored"
+    assert resolve_repo("vercel", "Project: nexus-prod failed to deploy", repo_map) == "uncensored-chatbot"
 
 
 def test_extractor_miss_returns_none(repo_map):
@@ -56,7 +56,7 @@ def test_resolved_repo_always_in_allowlist(repo_map):
 
 def test_make_resolver_closes_over_map(repo_map):
     resolver = make_resolver(repo_map)
-    assert resolver("vercel", "Project: nexus-prod") == "nexus-uncensored"
+    assert resolver("vercel", "Project: nexus-prod") == "uncensored-chatbot"
     assert resolver("vercel", "unrelated") is None
 
 
@@ -130,7 +130,7 @@ def _shipped_map():
 # (real subject -> expected repo) from live findings on agent001
 FLEET_SUBJECTS = {
     "[URGENT] vercel-log-watcher: agent-intel-kit-q2r2 — haiku:[fire-brief-job].*401": "agent-intel-kit",
-    "[URGENT] vercel-log-watcher: uncensored-chatbot — haiku:[auth][error].*InvalidCheck": "nexus-uncensored",
+    "[URGENT] vercel-log-watcher: uncensored-chatbot — haiku:[auth][error].*InvalidCheck": "uncensored-chatbot",
 }
 
 
@@ -174,13 +174,19 @@ def test_speculative_vendor_mappings_removed():
 def test_live_webmax_mappings_still_resolve():
     rm = _shipped_map()
     assert resolve_repo("webmax", "[URGENT] vercel-log-watcher: agent-intel-kit-q2r2 — x", rm) == "agent-intel-kit"
-    assert resolve_repo("webmax", "[URGENT] vercel-log-watcher: uncensored-chatbot — x", rm) == "nexus-uncensored"
+    # vercel-log-watcher also emits the bare slug; both must resolve to the same repo
+    assert resolve_repo("webmax", "[URGENT] vercel-log-watcher: agent-intel-kit — x", rm) == "agent-intel-kit"
+    assert resolve_repo("webmax", "[URGENT] vercel-log-watcher: uncensored-chatbot — x", rm) == "uncensored-chatbot"
 
 
-def test_secret_agent_vm_dropped_from_allowlist():
-    assert "secret-agent-vm" not in ALLOWLIST
-    # a fleet subject naming it cannot resolve to a fixer target
-    assert resolve_repo("webmax", "[URGENT] x-watcher: secret-agent-vm — y", _shipped_map()) is None
+def test_expanded_fixer_scope_resolves():
+    # Jake expanded the fixer to these revenue apps (2026-06-13). Project slugs are the
+    # names vercel-log-watcher emits; secret-agent has two live Vercel slugs → one repo.
+    rm = _shipped_map()
+    assert resolve_repo("webmax", "[URGENT] vercel-log-watcher: webmax-realtors — x", rm) == "webmax-realtors"
+    assert resolve_repo("webmax", "[URGENT] vercel-log-watcher: grantsfast-www-app-v1 — x", rm) == "grantsfast-www-app-v1"
+    assert resolve_repo("webmax", "[URGENT] vercel-log-watcher: secret-agent-v1 — x", rm) == "secret-agent-v1"
+    assert resolve_repo("webmax", "[URGENT] vercel-log-watcher: secret-agent-vm — x", rm) == "secret-agent-v1"
 
 
 def test_boe_generator_fleet_mapping_resolves():

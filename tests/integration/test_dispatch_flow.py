@@ -17,7 +17,7 @@ extractors:
 mappings:
   - vendor: vercel
     project: nexus-prod
-    repo: nexus-uncensored
+    repo: uncensored-chatbot
 """
 RULES_YAML = (
     "urgent:\n"
@@ -60,7 +60,7 @@ def test_seeded_flow_dispatches_once_skips_repeat_and_quarantines_spoof(tmp_path
 
     rows = InboxFindingsWriter.read_day(findings_dir, "2026-06-03")
     repos = {r["message_id"]: r["repo"] for r in rows}
-    assert repos["<real@h>"] == "nexus-uncensored"
+    assert repos["<real@h>"] == "uncensored-chatbot"
     assert repos["<spoof@h>"] is None        # spoof did not resolve to a repo
 
     # --- dispatch (dry-run) ---
@@ -70,13 +70,13 @@ def test_seeded_flow_dispatches_once_skips_repeat_and_quarantines_spoof(tmp_path
                          secret="s3cret", mode="dry_run", emit=emitted.append, now="t0")
     assert res["dispatched"] == 1 and res["considered"] == 1   # only the real one
     env = emitted[0]
-    assert env["payload"]["repo"] == "nexus-uncensored"
+    assert env["payload"]["repo"] == "uncensored-chatbot"
     assert env["payload"]["fix_hint"] == "keep the fix minimal"
     # No email prose leaked into the payload:
     for forbidden in ("subject", "text", "raw", "link"):
         assert forbidden not in env["payload"]
     # Spoof never appears in any emitted payload:
-    assert all(e["payload"]["repo"] == "nexus-uncensored" for e in emitted)
+    assert all(e["payload"]["repo"] == "uncensored-chatbot" for e in emitted)
 
     # --- second pass is idempotent ---
     res2 = dispatch_cycle(findings_rows=rows, ledger=ledger, fix_hints=fix_hints,

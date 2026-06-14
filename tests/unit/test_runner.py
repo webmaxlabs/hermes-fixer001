@@ -144,7 +144,7 @@ def test_fleet_urgent_subject_resolves_p1_and_repo_with_shipped_config(tmp_path)
     rows = InboxFindingsWriter.read_day(tmp_path / "f", "2026-06-04")
     assert rows, "expected one finding"
     assert rows[0]["priority"] == "P1"
-    assert rows[0]["repo"] == "nexus-uncensored"
+    assert rows[0]["repo"] == "uncensored-chatbot"
 
 
 def test_run_cycle_repo_none_without_resolver(tmp_path):
